@@ -17,7 +17,7 @@ export class RequestTrackerTrigger implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Request Tracker Trigger',
 		name: 'requestTrackerTrigger',
-		icon: { light: 'file:../../icons/requesttracker.svg', dark: 'file:../../icons/requesttracker.dark.svg' },
+		icon: { light: 'file:../../icons/request-tracker.svg', dark: 'file:../../icons/request-tracker.dark.svg' },
 		group: ['trigger'],
 		version: 1,
 		description: 'Starts the workflow when new or updated tickets are found in Request Tracker',
@@ -42,7 +42,7 @@ export class RequestTrackerTrigger implements INodeType {
 				isNodeSetting: true,
 				default: false,
 				noDataExpression: true,
-				description: 'Enable detailed debug logging for troubleshooting trigger behavior',
+				description: 'Whether to enable detailed debug logging for troubleshooting trigger behavior',
 			},
 			{
 				displayName: 'TicketSQL Query',

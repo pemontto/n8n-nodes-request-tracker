@@ -95,4 +95,13 @@ export const queueGetManyDescription: INodeProperties[] = [
 			},
 		],
 	},
+	{
+		displayName: 'Simplify',
+		name: 'simplify',
+		type: 'boolean',
+		default: true,
+		description:
+			'Whether to simplify the response by flattening custom fields and converting user objects to readable strings',
+		displayOptions: { show: showOnlyForQueueGetMany },
+	},
 ];

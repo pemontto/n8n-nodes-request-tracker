@@ -50,25 +50,11 @@ export function getBasicTicketFields(): INodeProperties[] {
 			description: 'The subject/title of the ticket',
 		},
 		{
-			displayName: 'Status',
-			name: 'status',
-			type: 'string',
-			default: '',
-			description: 'The status of the ticket (e.g., "new", "open", "resolved")',
-		},
-		{
 			displayName: 'Priority',
 			name: 'priority',
 			type: 'number',
 			default: 0,
 			description: 'The priority of the ticket (typically 0-99)',
-		},
-		{
-			displayName: 'Owner',
-			name: 'owner',
-			type: 'string',
-			default: '',
-			description: 'The username or email of the ticket owner',
 		},
 	];
 }
@@ -158,10 +144,121 @@ export function getQueueField(displayOptions: { resource: string[]; operation: s
 	return {
 		displayName: 'Queue',
 		name: 'queue',
-		type: 'string',
-		default: '',
+		type: 'resourceLocator',
+		default: { mode: 'list', value: '' },
 		description: 'The queue name or ID',
 		displayOptions: { show: displayOptions },
+		modes: [
+			{
+				displayName: 'From List',
+				name: 'list',
+				type: 'list',
+				typeOptions: {
+					searchListMethod: 'searchQueues',
+					searchable: true,
+					searchFilterRequired: false,
+				},
+			},
+			{
+				displayName: 'By Name or ID',
+				name: 'name',
+				type: 'string',
+				placeholder: 'e.g., General or 1',
+				validation: [
+					{
+						type: 'regex',
+						properties: {
+							regex: '.+',
+							errorMessage: 'Queue name or ID is required',
+						},
+					},
+				],
+			},
+			{
+				displayName: 'By ID',
+				name: 'id',
+				type: 'string',
+				placeholder: 'e.g., 1',
+				validation: [
+					{
+						type: 'regex',
+						properties: {
+							regex: '\\d+',
+							errorMessage: 'Queue ID must be a number',
+						},
+					},
+				],
+			},
+		],
+	};
+}
+
+export function getOwnerField(): INodeProperties {
+	return {
+		displayName: 'Owner',
+		name: 'owner',
+		type: 'resourceLocator',
+		default: { mode: 'list', value: '' },
+		description: 'The username or email of the ticket owner',
+		modes: [
+			{
+				displayName: 'From List',
+				name: 'list',
+				type: 'list',
+				typeOptions: {
+					searchListMethod: 'searchUsers',
+					searchable: true,
+					searchFilterRequired: false,
+				},
+			},
+			{
+				displayName: 'By Username',
+				name: 'name',
+				type: 'string',
+				placeholder: 'e.g., jsmith or jsmith@example.com',
+			},
+		],
+	};
+}
+
+export function getStatusField(): INodeProperties {
+	return {
+		displayName: 'Status Name or ID',
+		name: 'status',
+		type: 'options',
+		typeOptions: {
+			loadOptionsMethod: 'getStatuses',
+		},
+		default: '',
+		description: 'The status of the ticket. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+	};
+}
+
+export function getCustomFieldsResourceMapper(): INodeProperties {
+	return {
+		displayName: 'Custom Fields',
+		name: 'customFieldsUi',
+		type: 'resourceMapper',
+		noDataExpression: true,
+		default: {
+			mappingMode: 'defineBelow',
+			value: null,
+		},
+		description: 'Map custom field values using the resource mapper. Fetches available custom fields from RT based on the selected queue (or all fields if no queue selected).',
+		typeOptions: {
+			loadOptionsDependsOn: ['queue.value', 'queue'],
+			resourceMapper: {
+				resourceMapperMethod: 'getMappingColumns',
+				mode: 'add',
+				fieldWords: {
+					singular: 'custom field',
+					plural: 'custom fields',
+				},
+				addAllFields: true,
+				multiKeyMatch: false,
+				supportAutoMap: true,
+			},
+		},
 	};
 }
 

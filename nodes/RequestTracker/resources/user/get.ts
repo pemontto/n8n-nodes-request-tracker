@@ -16,4 +16,13 @@ export const userGetDescription: INodeProperties[] = [
 		description: 'The numeric ID or username of the user to retrieve',
 		displayOptions: { show: showOnlyForUserGet },
 	},
+	{
+		displayName: 'Simplify',
+		name: 'simplify',
+		type: 'boolean',
+		default: true,
+		description:
+			'Whether to simplify the response by flattening custom fields',
+		displayOptions: { show: showOnlyForUserGet },
+	},
 ];

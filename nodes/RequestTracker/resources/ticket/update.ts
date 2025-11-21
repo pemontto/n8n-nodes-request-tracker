@@ -5,6 +5,10 @@ import {
 	getDateFields,
 	getTimeFields,
 	getSLAField,
+	getQueueField,
+	getStatusField,
+	getOwnerField,
+	getCustomFieldsResourceMapper,
 	getCustomFieldsCollection,
 	getCustomFieldsJson,
 } from './sharedFields';
@@ -34,16 +38,16 @@ export const ticketUpdateDescription: INodeProperties[] = [
 		options: [
 			...getBasicTicketFields(),
 			{
-				displayName: 'Queue',
-				name: 'queue',
-				type: 'string',
-				default: '',
-				description: 'The queue name or ID',
+				...getQueueField({ resource: [], operation: [] }),
+				displayOptions: undefined, // Remove displayOptions since this is inside a collection
 			},
+			getStatusField(),
+			getOwnerField(),
 			...getEmailFields(),
 			...getDateFields(),
 			...getTimeFields(),
 			getSLAField(),
+			getCustomFieldsResourceMapper(),
 			getCustomFieldsJson(),
 			getCustomFieldsCollection(),
 		],

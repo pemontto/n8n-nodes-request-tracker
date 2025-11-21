@@ -89,4 +89,13 @@ export const userGetManyDescription: INodeProperties[] = [
 			},
 		],
 	},
+	{
+		displayName: 'Simplify',
+		name: 'simplify',
+		type: 'boolean',
+		default: true,
+		description:
+			'Whether to simplify the response by flattening custom fields',
+		displayOptions: { show: showOnlyForUserGetMany },
+	},
 ];

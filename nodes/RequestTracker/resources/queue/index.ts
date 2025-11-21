@@ -1,7 +1,7 @@
 import type { INodeProperties } from 'n8n-workflow';
 import { queueGetDescription } from './get';
 import { queueGetManyDescription } from './getMany';
-import { handleRtApiError } from '../../GenericFunctions';
+import { handleRtApiError, transformQueueData } from '../../GenericFunctions';
 
 const showOnlyForQueue = {
 	resource: ['queue'],
@@ -33,11 +33,13 @@ export const queueDescription: INodeProperties[] = [
 						method: 'GET',
 						url: '=/queue/{{$parameter.queueId}}',
 						qs: {
-							fields: 'id,Name,Description,Lifecycle,SubjectTag,CorrespondAddress,CommentAddress,Disabled',
+							fields: 'id,Name,Description,Lifecycle,SubjectTag,CorrespondAddress,CommentAddress,Disabled,CustomFields,Creator,Created,LastUpdatedBy,LastUpdated',
+							'fields[Creator]': 'id,Name,RealName,EmailAddress',
+							'fields[LastUpdatedBy]': 'id,Name,RealName,EmailAddress',
 						},
 					},
 					output: {
-						postReceive: [handleRtApiError],
+						postReceive: [handleRtApiError, transformQueueData],
 					},
 				},
 			},
@@ -54,7 +56,9 @@ export const queueDescription: INodeProperties[] = [
 							'Content-Type': 'application/json',
 						},
 						qs: {
-							fields: 'id,Name,Description,CorrespondAddress,CommentAddress,SubjectTag,Lifecycle,SortOrder,Creator,Created,LastUpdatedBy,LastUpdated,SLADisabled,Disabled',
+							fields: 'id,Name,Description,CorrespondAddress,CommentAddress,SubjectTag,Lifecycle,SortOrder,Creator,Created,LastUpdatedBy,LastUpdated,SLADisabled,Disabled,CustomFields',
+							'fields[Creator]': 'id,Name,RealName,EmailAddress',
+							'fields[LastUpdatedBy]': 'id,Name,RealName,EmailAddress',
 							per_page: '={{$parameter.returnAll ? 100 : Math.min($parameter.limit || 100, 100)}}',
 							order: '={{$parameter.additionalOptions?.order || "ASC"}}',
 							orderby: '={{$parameter.additionalOptions?.orderby || "Name"}}',
@@ -71,6 +75,7 @@ export const queueDescription: INodeProperties[] = [
 								},
 							},
 							handleRtApiError,
+							transformQueueData,
 						],
 					},
 					send: {

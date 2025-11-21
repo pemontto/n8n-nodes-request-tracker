@@ -6,6 +6,7 @@ import type {
 	IHttpRequestOptions,
 	JsonObject,
 	IBinaryData,
+	ILogger,
 } from 'n8n-workflow';
 import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 
@@ -312,6 +313,162 @@ export function transformSingleTicket(ticket: IDataObject, simplify: boolean): I
 
 	// Sort keys with preferred order
 	return sortTicketKeysWithPreferredOrder(transformed);
+}
+
+/**
+ * Transform a single queue object from RT REST2 API format
+ * Similar to transformSingleTicket but for queue resources
+ */
+export function transformSingleQueue(queue: IDataObject, simplify: boolean): IDataObject {
+	const transformed = { ...queue };
+
+	// Transform CustomFields from array to dictionary (same as tickets)
+	if (Array.isArray(transformed.CustomFields)) {
+		const customFieldsDict: IDataObject = {};
+
+		for (const field of transformed.CustomFields as IDataObject[]) {
+			const fieldName = field.name as string;
+			const fieldValues = field.values as unknown[];
+
+			if (!fieldValues || fieldValues.length === 0) {
+				customFieldsDict[fieldName] = null;
+			} else if (fieldValues.length === 1) {
+				customFieldsDict[fieldName] = fieldValues[0] as string | number | boolean;
+			} else {
+				customFieldsDict[fieldName] = fieldValues as string[];
+			}
+		}
+
+		transformed.CustomFields = simpleAlphanumericSort(customFieldsDict);
+	}
+
+	// Apply simplify transformations if requested
+	if (simplify) {
+		// 1. Flatten CustomFields into top-level properties
+		if (
+			transformed.CustomFields &&
+			typeof transformed.CustomFields === 'object' &&
+			!Array.isArray(transformed.CustomFields)
+		) {
+			for (const [cfKey, cfValue] of Object.entries(transformed.CustomFields)) {
+				if (Object.prototype.hasOwnProperty.call(transformed, cfKey)) {
+					transformed[`CF_${cfKey}`] = cfValue;
+				} else {
+					transformed[cfKey] = cfValue;
+				}
+			}
+			delete transformed.CustomFields;
+		}
+
+		// 2. Simplify user-like fields
+		const userFieldsToSimplify = ['Creator', 'LastUpdatedBy'];
+
+		for (const field of userFieldsToSimplify) {
+			if (transformed[field]) {
+				transformed[field] = simplifyUserObject(transformed[field] as IDataObject);
+			}
+		}
+	}
+
+	return transformed;
+}
+
+/**
+ * Transform queue data from RT REST2 API format to a more usable format
+ * This function is designed to work with n8n's declarative routing postReceive hook
+ */
+export async function transformQueueData(
+	this: IExecuteSingleFunctions,
+	items: INodeExecutionData[],
+): Promise<INodeExecutionData[]> {
+	// Get the simplify parameter from the node (defaults to false if not present)
+	const simplify = this.getNodeParameter('simplify', false) as boolean;
+
+	return items.map((item) => {
+		const transformed = transformSingleQueue(item.json, simplify);
+		return {
+			...item,
+			json: transformed,
+		};
+	});
+}
+
+/**
+ * Transform a single user object from RT REST2 API format
+ * Similar to transformSingleQueue but for user resources
+ */
+export function transformSingleUser(user: IDataObject, simplify: boolean): IDataObject {
+	const transformed = { ...user };
+
+	// Transform CustomFields from array to dictionary (same as tickets/queues)
+	if (Array.isArray(transformed.CustomFields)) {
+		const customFieldsDict: IDataObject = {};
+
+		for (const field of transformed.CustomFields as IDataObject[]) {
+			const fieldName = field.name as string;
+			const fieldValues = field.values as unknown[];
+
+			if (!fieldValues || fieldValues.length === 0) {
+				customFieldsDict[fieldName] = null;
+			} else if (fieldValues.length === 1) {
+				customFieldsDict[fieldName] = fieldValues[0] as string | number | boolean;
+			} else {
+				customFieldsDict[fieldName] = fieldValues as string[];
+			}
+		}
+
+		transformed.CustomFields = simpleAlphanumericSort(customFieldsDict);
+	}
+
+	// Apply simplify transformations if requested
+	if (simplify) {
+		// 1. Flatten CustomFields into top-level properties
+		if (
+			transformed.CustomFields &&
+			typeof transformed.CustomFields === 'object' &&
+			!Array.isArray(transformed.CustomFields)
+		) {
+			for (const [cfKey, cfValue] of Object.entries(transformed.CustomFields)) {
+				if (Object.prototype.hasOwnProperty.call(transformed, cfKey)) {
+					transformed[`CF_${cfKey}`] = cfValue;
+				} else {
+					transformed[cfKey] = cfValue;
+				}
+			}
+			delete transformed.CustomFields;
+		}
+
+		// 2. Simplify user-like fields (if they are objects)
+		const userFieldsToSimplify = ['Creator', 'LastUpdatedBy'];
+
+		for (const field of userFieldsToSimplify) {
+			if (transformed[field] && typeof transformed[field] === 'object') {
+				transformed[field] = simplifyUserObject(transformed[field] as IDataObject);
+			}
+		}
+	}
+
+	return transformed;
+}
+
+/**
+ * Transform user data from RT REST2 API format to a more usable format
+ * This function is designed to work with n8n's declarative routing postReceive hook
+ */
+export async function transformUserData(
+	this: IExecuteSingleFunctions,
+	items: INodeExecutionData[],
+): Promise<INodeExecutionData[]> {
+	// Get the simplify parameter from the node (defaults to false if not present)
+	const simplify = this.getNodeParameter('simplify', false) as boolean;
+
+	return items.map((item) => {
+		const transformed = transformSingleUser(item.json, simplify);
+		return {
+			...item,
+			json: transformed,
+		};
+	});
 }
 
 /**
@@ -642,7 +799,7 @@ function processSingleAttachmentContent(
 	metadata: IDataObject,
 	options: {
 		debug: boolean;
-		logger: any;
+		logger: ILogger;
 	},
 ): { metadata: IDataObject; binaryData?: IBinaryData } {
 	const { debug, logger } = options;
@@ -1562,9 +1719,9 @@ export async function debugPostReceiveResponse(
 
 
 /**
- * PreSend hook to merge CustomFields from JSON and Collection formats
- * Handles parsing JSON string and merging with collection format
- * Collection format takes precedence for duplicate keys
+ * PreSend hook to merge CustomFields from multiple formats
+ * Supports: resourceMapper (customFieldsUi), JSON (customFields), and Collection (customFieldsCollection)
+ * Priority order: resourceMapper > collection > JSON (later formats override earlier ones)
  */
 export async function mergeCustomFieldsPreSend(
 	this: IExecuteSingleFunctions,
@@ -1580,6 +1737,10 @@ export async function mergeCustomFieldsPreSend(
 	const fields = this.getNodeParameter(parameterName, 0, {}) as {
 		customFields?: string | Record<string, unknown>;
 		customFieldsCollection?: { fields?: Array<{ name: string; value: string }> };
+		customFieldsUi?: {
+			mappingMode?: string;
+			value?: Record<string, unknown> | null;
+		};
 	};
 
 	// Parse JSON if it is a string
@@ -1593,8 +1754,15 @@ export async function mergeCustomFieldsPreSend(
 		return acc;
 	}, {} as Record<string, string>);
 
-	// Merge with collection taking precedence
-	const merged = { ...(json || {}), ...(collection || {}) };
+	// Get resourceMapper values if present
+	const resourceMapperValues = fields.customFieldsUi?.value || null;
+
+	// Merge all three formats with priority: JSON (base) < collection < resourceMapper (highest)
+	const merged = {
+		...(json || {}),
+		...(collection || {}),
+		...(resourceMapperValues || {}),
+	};
 
 	// Only add CustomFields if there is something to add
 	if (Object.keys(merged).length > 0) {
@@ -1682,6 +1850,23 @@ async function processAttachmentsForUpload(
 	return attachments.length > 0 ? attachments : undefined;
 }
 
+/**
+ * Helper to extract value from resourceLocator parameter
+ * ResourceLocator can be { mode: 'list' | 'name' | 'id', value: string | number } or a plain string/number
+ */
+function extractResourceLocatorValue(param: unknown): string | number | undefined {
+	if (param === undefined || param === null || param === '') {
+		return undefined;
+	}
+	// If it's a resourceLocator object with mode and value
+	if (typeof param === 'object' && param !== null && 'value' in param) {
+		const value = (param as { value: unknown }).value;
+		return value !== '' ? (value as string | number) : undefined;
+	}
+	// If it's a plain value (backwards compatibility)
+	return param as string | number;
+}
+
 export async function buildRequestBodyPreSend(
 	this: IExecuteSingleFunctions,
 	requestOptions: IHttpRequestOptions,
@@ -1717,7 +1902,8 @@ export async function buildRequestBodyPreSend(
 
 	if (operation === 'create') {
 		// Required fields
-		body.Queue = this.getNodeParameter('queue', 0) as string;
+		const queueParam = this.getNodeParameter('queue', 0);
+		body.Queue = extractResourceLocatorValue(queueParam);
 		body.Subject = this.getNodeParameter('subject', 0) as string;
 
 		// Optional fields
@@ -1736,7 +1922,7 @@ export async function buildRequestBodyPreSend(
 		const additionalFields = this.getNodeParameter('additionalFields', 0, {}) as Record<string, unknown>;
 		addField('Priority', additionalFields.priority);
 		addField('Status', additionalFields.status);
-		addField('Owner', additionalFields.owner);
+		addField('Owner', extractResourceLocatorValue(additionalFields.owner));
 		addField('Cc', additionalFields.cc);
 		addField('AdminCc', additionalFields.adminCc);
 		addField('Due', additionalFields.due);
@@ -1765,10 +1951,10 @@ export async function buildRequestBodyPreSend(
 		// Update fields
 		const updateFields = this.getNodeParameter('updateFields', 0, {}) as Record<string, unknown>;
 		addField('Subject', updateFields.subject);
-		addField('Queue', updateFields.queue);
+		addField('Queue', extractResourceLocatorValue(updateFields.queue));
 		addField('Status', updateFields.status);
 		addField('Priority', updateFields.priority);
-		addField('Owner', updateFields.owner);
+		addField('Owner', extractResourceLocatorValue(updateFields.owner));
 		addField('Requestor', updateFields.requestor);
 		addField('Cc', updateFields.cc);
 		addField('AdminCc', updateFields.adminCc);

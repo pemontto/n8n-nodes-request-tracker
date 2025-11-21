@@ -2,6 +2,7 @@ import type { INodeProperties } from 'n8n-workflow';
 import {
 	getContentFields,
 	getBasicTicketFields,
+	getStatusField,
 	getTimeTakenField,
 	getCustomFieldsCollection,
 	getCustomFieldsJson,
@@ -40,10 +41,9 @@ function getCommentCorrespondDescription(operation: 'addComment' | 'addCorrespon
 			default: {},
 			displayOptions: { show: showOnlyFor },
 			options: [
-				// Only include Subject and Status from basic fields
-				...getBasicTicketFields().filter(f =>
-					f.name === 'subject' || f.name === 'status'
-				),
+				// Only include Subject from basic fields, use statusField for Status
+				...getBasicTicketFields().filter(f => f.name === 'subject'),
+				getStatusField(),
 				getTimeTakenField(),
 				getCustomFieldsJson(),
 				getCustomFieldsCollection(),

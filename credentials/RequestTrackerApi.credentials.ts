@@ -9,7 +9,7 @@ import {
 export class RequestTrackerApi implements ICredentialType {
 	name = 'requestTrackerApi';
 	displayName = 'Request Tracker API';
-	icon: Icon = { light: 'file:../icons/requesttracker.svg', dark: 'file:../icons/requesttracker.dark.svg' };
+	icon: Icon = { light: 'file:../icons/request-tracker.svg', dark: 'file:../icons/request-tracker.dark.svg' };
 	documentationUrl = 'https://docs.bestpractical.com/rt/5/RT/REST2.html'; // Or a more specific internal doc if available
 	properties: INodeProperties[] = [
 		{
@@ -52,6 +52,13 @@ export class RequestTrackerApi implements ICredentialType {
 			},
 			// skipSslCertificateValidation: '={{ $credentials.allowUnauthorizedCerts }}',
 		},
+	};
+
+	// Makes this credential available in the HTTP Request node
+	httpRequestNode = {
+		name: 'Request Tracker',
+		docsUrl: 'https://docs.bestpractical.com/rt/5/RT/REST2.html',
+		apiBaseUrlPlaceholder: 'https://rt.example.com/REST/2.0',
 	};
 
 	// The "test" method allows n8n to verify if the credential is valid.

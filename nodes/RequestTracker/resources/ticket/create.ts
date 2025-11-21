@@ -6,6 +6,9 @@ import {
 	getTimeFields,
 	getSLAField,
 	getQueueField,
+	getStatusField,
+	getOwnerField,
+	getCustomFieldsResourceMapper,
 	getCustomFieldsCollection,
 	getCustomFieldsJson,
 	getAttachmentsField,
@@ -76,10 +79,13 @@ export const ticketCreateDescription: INodeProperties[] = [
 				description: 'MIME type for the ticket content',
 			},
 			...getBasicTicketFields().filter(f => f.name !== 'subject'), // Subject is already a top-level required field
+			getStatusField(),
+			getOwnerField(),
 			...getEmailFields().filter(f => f.name !== 'requestor'), // Requestor is already a top-level field
 			...getDateFields(),
 			...getTimeFields().filter(f => f.name === 'timeEstimated'), // Only timeEstimated for create
 			getSLAField(),
+			getCustomFieldsResourceMapper(),
 			getCustomFieldsJson(),
 			getCustomFieldsCollection(),
 		],

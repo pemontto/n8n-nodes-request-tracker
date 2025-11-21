@@ -16,4 +16,13 @@ export const queueGetDescription: INodeProperties[] = [
 		description: 'The numeric ID or name of the queue to retrieve',
 		displayOptions: { show: showOnlyForQueueGet },
 	},
+	{
+		displayName: 'Simplify',
+		name: 'simplify',
+		type: 'boolean',
+		default: true,
+		description:
+			'Whether to simplify the response by flattening custom fields and converting user objects to readable strings',
+		displayOptions: { show: showOnlyForQueueGet },
+	},
 ];
