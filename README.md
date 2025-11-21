@@ -1,72 +1,132 @@
 # n8n-nodes-request-tracker
 
-This is an n8n community node for Request Tracker (RT5+). It lets you use the RT REST2 API in your n8n workflows.
+Community node for Request Tracker (RT 5+) providing comprehensive access to the REST2 API in n8n workflows.
 
 [n8n](https://n8n.io/) is a fair-code licensed workflow automation platform.
 
 [Installation](#installation)
-[Operations](#operations)
+[Implemented Nodes & Operations](#implemented-nodes--operations)
 [Credentials](#credentials)
 [Compatibility](#compatibility)
 [Usage](#usage)
+[Notes](#notes)
 [Resources](#resources)
 
 ## Installation
 
-Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes/installation/) in the n8n community nodes documentation.
+Follow the official guide for installing community nodes: https://docs.n8n.io/integrations/community-nodes/installation/
 
-## Operations
+## Implemented Nodes & Operations
 
-Initial scope (implemented):
+This package exposes two nodes:
+
+- Request Tracker (main)
+- Request Tracker Trigger
+
+Implemented resources and operations in the main node:
+
 - Ticket
-  - Get a ticket by ID
+  - Create: create a new ticket (supports content, status, owner, priority, recipients, attachments)
+  - Get: fetch a single ticket by ID
+  - Update: update ticket metadata (subject, queue, status, priority, owner, recipients, due/start/time fields, SLA)
+  - Add Comment: add an internal comment to a ticket (supports attachments)
+  - Add Correspondence: add external correspondence/reply (supports attachments)
+  - Search: search tickets (TicketSQL or simple query; pagination and field expansion supported)
+  - Get History: fetch transactions for a ticket with filters and optional content/attachments aggregation
 
-Planned additions:
-- Transactions
-- Attachments
-- Users
-- Queues
+- Attachment
+  - Get: fetch a single attachment by ID (returns text content inline and binary via n8n binary data)
+  - Get Many: list/download attachments for a transaction or ticket with filters (filename, content type, created range), optional content download, and pagination
+
+- Transaction
+  - Get: fetch a single transaction by ID
+  - Get Many: search transactions via TransactionSQL (pagination, field selection)
+
+- User
+  - Get: fetch a single user by ID or username
+  - Get Many: list users (privileged or all) with filters (username, email) and pagination
+
+- Queue
+  - Get: fetch a single queue by ID or name
+  - Get Many: list queues with filters (name, description, lifecycle) and pagination
+
+Additional features:
+- Field expansion for linked objects (Queue, Creator, Owner, Requestors, Cc, AdminCc)
+- Output simplification option to flatten custom fields and user references
+- Robust post-receive transformations for tickets, queues, users, transactions, and attachments
+- UI list-search helpers for queues and users (typeahead search in dropdowns)
+- Resource Mapper for CustomFields with queue-aware loading (see Notes)
+
+Request Tracker Trigger node:
+- Polls for newly created or updated tickets using a TicketSQL base query with time-based filtering
+- Configurable trigger field (Created or LastUpdated), limit, field selection, and output simplification
+- Supports manual mode to fetch recent items without time filter
 
 ## Credentials
 
-Use API Token authentication for RT REST2.
+Authentication: API Token for RT REST2.
 
 - Fields:
-  - RT Instance URL (e.g. https://rt.mycompany.com)
+  - RT Instance URL (e.g. https://rt.mycompany.com or https://rt.mycompany.com/rt)
   - API Token
+  - Ignore TLS Issues (Insecure): allow requests to instances with self-signed/expired certificates
 
-Authorization header format:
+Authorization header:
 - Authorization: token <API_TOKEN>
 
 Connectivity test:
-- The credential performs a simple request to your RT instance (REST2 entry) to verify reachability.
+- Performs a request to `/REST/2.0/rt` using your instance URL to verify reachability and TLS settings.
 
 ## Compatibility
 
-Compatible with n8n@1.60.0 or later.
+Tested with n8n 1.60.0+.
 
 ## Usage
 
-1. In n8n, create a new credential:
+1. Create credentials:
    - Request Tracker API
-   - RT Instance URL: e.g. https://rt.mycompany.com
-   - API Token: your RT API token
+   - RT Instance URL (no trailing slash required; the node resolves `/REST/2.0`)
+   - API Token
+   - Optionally enable Ignore TLS Issues for self-signed certs
 
-2. Add the node "Request Tracker (RT5)" to your workflow.
+2. Add the "Request Tracker" node or "Request Tracker Trigger" node to a workflow.
 
-3. Select Resource "Ticket" and Operation "Get".
+3. Select a Resource and Operation:
+   - Examples:
+     - Ticket → Get → enter ticketId
+     - Ticket → Create → set Queue, Subject, optional Content/Status/Owner/recipients; add attachments via:
+       - all binary data from the incoming item
+       - selected binary properties
+       - manual JSON array: [{ FileName, FileType, FileContent (base64) }]
+     - Ticket → Search → TicketSQL or simple query; set limit/returnAll and ordering
+     - Ticket → Get History → choose transaction types, date range, and whether to include content or attachments
+     - Attachment → Get Many → scope by transactionId or ticketId with filters; optionally download content
+     - Transaction → Get Many → supply TransactionSQL query
+     - User/Queue → Get Many → use filters and pagination
 
-4. Enter the Ticket ID (numeric) and execute the node.
+4. Optional settings:
+   - Simplify Output: flatten custom fields, collapse user references, and sort keys
+   - Debug (node setting): detailed request/response logging for troubleshooting
 
-5. The node returns the ticket payload as JSON.
+Trigger usage:
+- Configure a base TicketSQL query (e.g., "Queue = 'General' AND Status = 'open'").
+- Choose the field to trigger on (Created or LastUpdated).
+- The trigger maintains a per-field timestamp to avoid crossover when multiple triggers are used.
 
 ## Notes
 
-- Base URL handling ensures your instance URL is normalized and the node targets RT REST2: `<RT Instance URL>/REST/2.0`.
-- The node sets Accept: application/json.
-- Future operations/resources will follow the same design pattern with option-based routing.
+- Base URL normalization appends `/REST/2.0` automatically to your instance URL.
+- Accept: application/json is set for requests.
+- CustomFields Resource Mapper:
+  - Queue-aware loading: when a queue context is available (explicit queue parameter or resolved via ticketId), custom fields are loaded from `/queue/{id}/customfields`.
+  - When no queue context is available yet, the mapper returns no fields to avoid global fetch.
+  - Select/Combobox fields are rendered as plain text inputs for performance.
+- Attachments:
+  - Text content is returned inline in JSON when downloaded.
+  - Binary content is provided via n8n binary data with stable property names and preserved metadata.
+- Pagination is supported across list/search operations and implemented efficiently for large result sets.
 
 ## Resources
 
-- Request Tracker REST2 API docs: https://docs.bestpractical.com/rt/5.0.9/RT/REST2.html
-- n8n community nodes documentation: https://docs.n8n.io/integrations/#community-nodes
+- Request Tracker REST2 API: https://docs.bestpractical.com/rt/5.0.9/RT/REST2.html
+- n8n Community Nodes: https://docs.n8n.io/integrations/#community-nodes
