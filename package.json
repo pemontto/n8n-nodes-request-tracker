@@ -1,56 +1,45 @@
 {
-    "name": "n8n-nodes-request-tracker",
-    "version": "0.1.0",
-    "description": "Request Tracker node for n8n",
-    "license": "MIT",
-    "homepage": "",
-    "keywords": [
-        "n8n-community-node-package"
-    ],
-    "author": {
-        "name": "pemontto",
-        "email": "pemontto@gmail.com"
-    },
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/pemontto/n8n-nodes-request-tracker.git"
-    },
-    "scripts": {
-        "build": "n8n-node build",
-        "build:watch": "tsc --watch",
-        "dev": "n8n-node dev",
-        "lint": "n8n-node lint",
-        "lint:fix": "n8n-node lint --fix",
-        "release": "n8n-node release",
-        "prepublishOnly": "n8n-node prerelease"
-    },
-    "files": [
-        "dist"
-    ],
-    "n8n": {
-        "n8nNodesApiVersion": 1,
-        "strict": true,
-        "credentials": [
-            "dist/credentials/RequestTrackerApi.credentials.js"
-        ],
-        "nodes": [
-            "dist/nodes/RequestTracker/RequestTracker.node.js",
-            "dist/nodes/RequestTracker/RequestTrackerTrigger.node.js"
-        ]
-    },
-    "devDependencies": {
-        "@n8n/node-cli": "*",
-        "@types/node": "^24.9.1",
-        "eslint": "9.32.0",
-        "prettier": "3.6.2",
-        "release-it": "^19.0.4",
-        "typescript": "5.9.2"
-    },
-    "peerDependencies": {
-        "n8n-workflow": "*"
-    },
-    "packageManager": "pnpm@10.16.1+sha512.0e155aa2629db8672b49e8475da6226aa4bdea85fdcdfdc15350874946d4f3c91faaf64cbdc4a5d1ab8002f473d5c3fcedcd197989cf0390f9badd3c04678706",
-    "dependencies": {
-        "n8n-nodes-request-tracker": "link:../../Library/pnpm/global/5/node_modules/n8n-nodes-request-tracker"
-    }
+  "name": "n8n-nodes-request-tracker",
+  "version": "0.1.0",
+  "description": "Request Tracker node for n8n",
+  "license": "MIT",
+  "homepage": "",
+  "keywords": ["n8n-community-node-package"],
+  "author": { "name": "pemontto", "email": "pemontto@gmail.com" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pemontto/n8n-nodes-request-tracker.git"
+  },
+  "scripts": {
+    "build": "n8n-node build",
+    "build:watch": "tsc --watch",
+    "dev": "n8n-node dev",
+    "lint": "n8n-node lint",
+    "lint:fix": "n8n-node lint --fix",
+    "release": "n8n-node release",
+    "prepublishOnly": "n8n-node prerelease"
+  },
+  "files": ["dist"],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "strict": true,
+    "credentials": ["dist/credentials/RequestTrackerApi.credentials.js"],
+    "nodes": [
+      "dist/nodes/RequestTracker/RequestTracker.node.js",
+      "dist/nodes/RequestTracker/RequestTrackerTrigger.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@n8n/node-cli": "*",
+    "@types/node": "^24.9.1",
+    "eslint": "9.32.0",
+    "prettier": "3.6.2",
+    "release-it": "^19.0.4",
+    "typescript": "5.9.2"
+  },
+  "peerDependencies": { "n8n-workflow": "*" },
+  "packageManager": "pnpm@10.16.1+sha512.0e155aa2629db8672b49e8475da6226aa4bdea85fdcdfdc15350874946d4f3c91faaf64cbdc4a5d1ab8002f473d5c3fcedcd197989cf0390f9badd3c04678706",
+  "dependencies": {
+    "n8n-nodes-request-tracker": "link:../../Library/pnpm/global/5/node_modules/n8n-nodes-request-tracker"
+  }
 }

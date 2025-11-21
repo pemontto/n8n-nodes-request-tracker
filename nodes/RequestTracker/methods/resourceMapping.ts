@@ -96,15 +96,11 @@ export const resourceMapping = {
 				}
 			} catch {
 				// Queue parameter not available - will use fallback endpoint
-				console.log('[Custom Fields] Queue parameter not available, using fallback endpoint');
 			}
 
 			// Use queue-specific endpoint if queue is available
 			if (queueId) {
 				endpoint = `/queue/${queueId}/customfields`;
-				console.log(`[Custom Fields] Using queue-specific endpoint: ${endpoint}`);
-			} else {
-				console.log('[Custom Fields] Using global custom fields endpoint');
 			}
 
 			// Fetch custom fields from RT API
@@ -144,10 +140,6 @@ export const resourceMapping = {
 				}>;
 			};
 
-			console.log(
-				`[Custom Fields] Fetched ${response.items?.length || 0} custom fields from ${endpoint}`,
-			);
-
 			// Transform RT custom fields to ResourceMapperFields format
 			const fields: ResourceMapperField[] = await Promise.all(
 				(response.items || []).map(async (field) => {
@@ -174,14 +166,7 @@ export const resourceMapping = {
 									baseUrl,
 									skipSslCertificateValidation,
 								);
-								console.log(
-									`[Custom Fields] Fetched ${options?.length || 0} values for ${field.Name}`,
-								);
-							} catch (error) {
-								console.error(
-									`[Custom Fields] Error fetching values for ${field.Name}:`,
-									error,
-								);
+							} catch {
 								// Continue without options if fetch fails
 							}
 							break;
@@ -214,8 +199,7 @@ export const resourceMapping = {
 			);
 
 			return { fields };
-		} catch (error) {
-			console.error('[Custom Fields] Error fetching custom fields:', error);
+		} catch {
 			// Return empty fields on error - better UX than throwing
 			return { fields: [] };
 		}

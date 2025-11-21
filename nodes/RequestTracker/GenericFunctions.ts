@@ -6,9 +6,169 @@ import type {
 	IHttpRequestOptions,
 	JsonObject,
 	IBinaryData,
-	ILogger,
+	Logger,
 } from 'n8n-workflow';
 import { NodeApiError, NodeOperationError } from 'n8n-workflow';
+
+/**
+ * Centralized constants for user-related fields and ticket key ordering
+ */
+const USER_FIELDS = ['Creator', 'LastUpdatedBy', 'Owner'] as const;
+const USER_ARRAY_FIELDS = ['Requestors', 'Cc', 'AdminCc'] as const;
+const TRANSACTION_CONTENT_TYPES = ['Comment', 'Create', 'Correspond', 'EmailRecord', 'CommentEmailRecord'] as const;
+const TICKET_PREFERRED_ORDER = [
+	'id',
+	'Queue',
+	'Subject',
+	'Status',
+	'Type',
+	'Priority',
+	'Created',
+	'Creator',
+	'LastUpdated',
+	'LastUpdatedBy',
+	'Owner',
+	'Requestors',
+	'Cc',
+	'AdminCc',
+	'CustomFields',
+	'Links',
+] as const;
+
+/**
+ * Preferred sort order for Queue objects
+ */
+const QUEUE_PREFERRED_ORDER = [
+	'id',
+	'Name',
+	'Description',
+	'Lifecycle',
+	'Created',
+	'LastUpdated',
+	'Creator',
+	'LastUpdatedBy',
+	'CorrespondAddress',
+	'CommentAddress',
+	'SubjectTag',
+	'SortOrder',
+	'SLADisabled',
+	'Disabled',
+	'CustomFields',
+	'_url',
+	'type',
+] as const;
+
+/**
+ * Preferred sort order for User objects
+ */
+const USER_PREFERRED_ORDER = [
+	'id',
+	'Name',
+	'RealName',
+	'EmailAddress',
+	'Organization',
+	'Created',
+	'LastUpdated',
+	'Creator',
+	'LastUpdatedBy',
+	'Address1',
+	'Address2',
+	'City',
+	'State',
+	'Zip',
+	'Country',
+	'MobilePhone',
+	'HomePhone',
+	'WorkPhone',
+	'PagerPhone',
+	'Timezone',
+	'Lang',
+	'Signature',
+	'Comments',
+	'CustomFields',
+	'_url',
+	'type',
+	'Gecos',
+	'NickName',
+] as const;
+
+/**
+ * Normalize RT CustomFields array to a sorted dictionary
+ */
+function normalizeCustomFields(input: unknown): IDataObject | undefined {
+	if (Array.isArray(input)) {
+		const dict: IDataObject = {};
+		for (const field of input as IDataObject[]) {
+			const fieldName = (field.name as string) || '';
+			const values = field.values as unknown[];
+			if (!fieldName) continue;
+
+			if (!values || values.length === 0) {
+				dict[fieldName] = null;
+			} else if (values.length === 1) {
+				dict[fieldName] = values[0] as string | number | boolean;
+			} else {
+				dict[fieldName] = values as unknown[];
+			}
+		}
+		return simpleAlphanumericSort(dict);
+	}
+	if (input && typeof input === 'object' && !Array.isArray(input)) {
+		return simpleAlphanumericSort(input as IDataObject);
+	}
+	return undefined;
+}
+
+/**
+ * Generic simplifier for resources
+ */
+function simplifyResource(
+	resource: IDataObject,
+	opts: {
+		userFields?: readonly string[];
+		userArrayFields?: readonly string[];
+		flattenCustomFields?: boolean;
+	} = {},
+): IDataObject {
+	const out: IDataObject = { ...resource };
+
+	// Flatten CustomFields into top-level properties
+	if (opts.flattenCustomFields !== false) {
+		if (
+			out.CustomFields &&
+			typeof out.CustomFields === 'object' &&
+			!Array.isArray(out.CustomFields)
+		) {
+			for (const [cfKey, cfValue] of Object.entries(out.CustomFields as IDataObject)) {
+				if (Object.prototype.hasOwnProperty.call(out, cfKey)) {
+					out[`CF_${cfKey}`] = cfValue;
+				} else {
+					out[cfKey] = cfValue;
+				}
+			}
+			delete out.CustomFields;
+		}
+	}
+
+	// Simplify user-like fields
+	if (opts.userFields) {
+		for (const field of opts.userFields) {
+			if (out[field]) {
+				out[field] = simplifyUserObject(out[field] as IDataObject);
+			}
+		}
+	}
+
+	if (opts.userArrayFields) {
+		for (const field of opts.userArrayFields) {
+			if (Array.isArray(out[field])) {
+				out[field] = (out[field] as IDataObject[]).map(simplifyUserObject);
+			}
+		}
+	}
+
+	return out;
+}
 
 /**
  * Simple alphanumeric sort for object keys
@@ -66,36 +226,72 @@ export async function transformOperationResponse(
  * Sorts ticket keys with a preferred order for some, then alphanumeric for the rest
  */
 function sortTicketKeysWithPreferredOrder(obj: IDataObject): IDataObject {
-	const preferredOrder = [
-		'id',
-		'Queue',
-		'Subject',
-		'Status',
-		'Type',
-		'Priority',
-		'Created',
-		'Creator',
-		'LastUpdated',
-		'LastUpdatedBy',
-		'Owner',
-		'Requestors',
-		'Cc',
-		'AdminCc',
-		'CustomFields',
-		'Links',
-	];
 	const result: IDataObject = {};
 	const allKeys = Object.keys(obj);
 	const remainingKeys: string[] = [];
 
-	for (const key of preferredOrder) {
+	for (const key of TICKET_PREFERRED_ORDER as readonly string[]) {
 		if (allKeys.includes(key)) {
 			result[key] = obj[key];
 		}
 	}
 
 	for (const key of allKeys) {
-		if (!preferredOrder.includes(key)) {
+		if (!(TICKET_PREFERRED_ORDER as readonly string[]).includes(key)) {
+			remainingKeys.push(key);
+		}
+	}
+	remainingKeys.sort((a, b) => a.localeCompare(b));
+
+	for (const key of remainingKeys) {
+		result[key] = obj[key];
+	}
+	return result;
+}
+
+/**
+ * Sorts queue keys using preferred order, then alphanumeric for the rest
+ */
+function sortQueueKeysWithPreferredOrder(obj: IDataObject): IDataObject {
+	const result: IDataObject = {};
+	const allKeys = Object.keys(obj);
+	const remainingKeys: string[] = [];
+
+	for (const key of QUEUE_PREFERRED_ORDER as readonly string[]) {
+		if (allKeys.includes(key)) {
+			result[key] = obj[key];
+		}
+	}
+
+	for (const key of allKeys) {
+		if (!(QUEUE_PREFERRED_ORDER as readonly string[]).includes(key)) {
+			remainingKeys.push(key);
+		}
+	}
+	remainingKeys.sort((a, b) => a.localeCompare(b));
+
+	for (const key of remainingKeys) {
+		result[key] = obj[key];
+	}
+	return result;
+}
+
+/**
+ * Sorts user keys using preferred order, then alphanumeric for the rest
+ */
+function sortUserKeysWithPreferredOrder(obj: IDataObject): IDataObject {
+	const result: IDataObject = {};
+	const allKeys = Object.keys(obj);
+	const remainingKeys: string[] = [];
+
+	for (const key of USER_PREFERRED_ORDER as readonly string[]) {
+		if (allKeys.includes(key)) {
+			result[key] = obj[key];
+		}
+	}
+
+	for (const key of allKeys) {
+		if (!(USER_PREFERRED_ORDER as readonly string[]).includes(key)) {
 			remainingKeys.push(key);
 		}
 	}
@@ -135,27 +331,9 @@ export function transformSingleTicket(ticket: IDataObject, simplify: boolean): I
 	const transformed = { ...ticket };
 
 	// Transform CustomFields from array to dictionary
-	if (Array.isArray(transformed.CustomFields)) {
-		const customFieldsDict: IDataObject = {};
-
-		for (const field of transformed.CustomFields as IDataObject[]) {
-			const fieldName = field.name as string;
-			const fieldValues = field.values as unknown[];
-
-			if (!fieldValues || fieldValues.length === 0) {
-				// Empty array becomes null
-				customFieldsDict[fieldName] = null;
-			} else if (fieldValues.length === 1) {
-				// Single value unwrapped
-				customFieldsDict[fieldName] = fieldValues[0] as string | number | boolean;
-			} else {
-				// Multiple values remain as array
-				customFieldsDict[fieldName] = fieldValues as string[];
-			}
-		}
-
-		// Sort CustomFields alphabetically
-		transformed.CustomFields = simpleAlphanumericSort(customFieldsDict);
+	const normalizedCF = normalizeCustomFields(transformed.CustomFields);
+	if (normalizedCF) {
+		transformed.CustomFields = normalizedCF;
 	}
 
 	// Transform _hyperlinks to Links
@@ -248,6 +426,44 @@ export function transformSingleTicket(ticket: IDataObject, simplify: boolean): I
 			}
 		}
 
+		// Sort link collections
+		if (Array.isArray(links.tickets)) {
+			(links.tickets as IDataObject[]).sort(
+				(a, b) =>
+					String(a.type || '').localeCompare(String(b.type || '')) ||
+					String(a.id || '').localeCompare(String(b.id || '')),
+			);
+		}
+		if (Array.isArray(links.external)) {
+			(links.external as IDataObject[]).sort(
+				(a, b) =>
+					String(a.label || '').localeCompare(String(b.label || '')) ||
+					String(a.url || '').localeCompare(String(b.url || '')),
+			);
+		}
+		if (Array.isArray(links.lifecycle)) {
+			(links.lifecycle as IDataObject[]).sort(
+				(a, b) =>
+					String(a.label || '').localeCompare(String(b.label || '')) ||
+					String(a.from || '').localeCompare(String(b.from || '')) ||
+					String(a.to || '').localeCompare(String(b.to || '')),
+			);
+		}
+		if (Array.isArray(links.customfields)) {
+			(links.customfields as IDataObject[]).sort(
+				(a, b) =>
+					String(a.name || '').localeCompare(String(b.name || '')) ||
+					String(a.id || '').localeCompare(String(b.id || '')),
+			);
+		}
+		if (Array.isArray(links.other)) {
+			(links.other as IDataObject[]).sort(
+				(a, b) =>
+					String((a as IDataObject).ref || '').localeCompare(String((b as IDataObject).ref || '')) ||
+					String((a as IDataObject).id || '').localeCompare(String((b as IDataObject).id || '')),
+			);
+		}
+
 		// Clean up empty arrays
 		if ((links.tickets as IDataObject[]).length === 0) {
 			delete links.tickets;
@@ -268,40 +484,17 @@ export function transformSingleTicket(ticket: IDataObject, simplify: boolean): I
 
 	// Apply simplify transformations if requested
 	if (simplify) {
-		// 1. Flatten CustomFields into top-level properties
-		if (
-			transformed.CustomFields &&
-			typeof transformed.CustomFields === 'object' &&
-			!Array.isArray(transformed.CustomFields)
-		) {
-			for (const [cfKey, cfValue] of Object.entries(transformed.CustomFields)) {
-				if (Object.prototype.hasOwnProperty.call(transformed, cfKey)) {
-					// Prefix with CF_ if there's a collision
-					transformed[`CF_${cfKey}`] = cfValue;
-				} else {
-					transformed[cfKey] = cfValue;
-				}
-			}
-			delete transformed.CustomFields;
-		}
+		// Flatten CustomFields and simplify user fields/arrays
+		Object.assign(
+			transformed,
+			simplifyResource(transformed, {
+				userFields: USER_FIELDS,
+				userArrayFields: USER_ARRAY_FIELDS,
+				flattenCustomFields: true,
+			}),
+		);
 
-		// 2. Simplify user-like fields
-		const userFieldsToSimplify = ['Creator', 'LastUpdatedBy', 'Owner'];
-		const userArrayFieldsToSimplify = ['Requestors', 'Cc', 'AdminCc'];
-
-		for (const field of userFieldsToSimplify) {
-			if (transformed[field]) {
-				transformed[field] = simplifyUserObject(transformed[field] as IDataObject);
-			}
-		}
-
-		for (const field of userArrayFieldsToSimplify) {
-			if (Array.isArray(transformed[field])) {
-				transformed[field] = (transformed[field] as IDataObject[]).map(simplifyUserObject);
-			}
-		}
-
-		// 3. Simplify Queue to just the name
+		// Simplify Queue to just the name
 		if (
 			transformed.Queue &&
 			typeof transformed.Queue === 'object' &&
@@ -323,54 +516,23 @@ export function transformSingleQueue(queue: IDataObject, simplify: boolean): IDa
 	const transformed = { ...queue };
 
 	// Transform CustomFields from array to dictionary (same as tickets)
-	if (Array.isArray(transformed.CustomFields)) {
-		const customFieldsDict: IDataObject = {};
-
-		for (const field of transformed.CustomFields as IDataObject[]) {
-			const fieldName = field.name as string;
-			const fieldValues = field.values as unknown[];
-
-			if (!fieldValues || fieldValues.length === 0) {
-				customFieldsDict[fieldName] = null;
-			} else if (fieldValues.length === 1) {
-				customFieldsDict[fieldName] = fieldValues[0] as string | number | boolean;
-			} else {
-				customFieldsDict[fieldName] = fieldValues as string[];
-			}
-		}
-
-		transformed.CustomFields = simpleAlphanumericSort(customFieldsDict);
+	const normalizedQueueCF = normalizeCustomFields(transformed.CustomFields);
+	if (normalizedQueueCF) {
+		transformed.CustomFields = normalizedQueueCF;
 	}
 
 	// Apply simplify transformations if requested
 	if (simplify) {
-		// 1. Flatten CustomFields into top-level properties
-		if (
-			transformed.CustomFields &&
-			typeof transformed.CustomFields === 'object' &&
-			!Array.isArray(transformed.CustomFields)
-		) {
-			for (const [cfKey, cfValue] of Object.entries(transformed.CustomFields)) {
-				if (Object.prototype.hasOwnProperty.call(transformed, cfKey)) {
-					transformed[`CF_${cfKey}`] = cfValue;
-				} else {
-					transformed[cfKey] = cfValue;
-				}
-			}
-			delete transformed.CustomFields;
-		}
-
-		// 2. Simplify user-like fields
-		const userFieldsToSimplify = ['Creator', 'LastUpdatedBy'];
-
-		for (const field of userFieldsToSimplify) {
-			if (transformed[field]) {
-				transformed[field] = simplifyUserObject(transformed[field] as IDataObject);
-			}
-		}
+		Object.assign(
+			transformed,
+			simplifyResource(transformed, {
+				userFields: ['Creator', 'LastUpdatedBy'],
+				flattenCustomFields: true,
+			}),
+		);
 	}
 
-	return transformed;
+	return sortQueueKeysWithPreferredOrder(transformed);
 }
 
 /**
@@ -401,54 +563,23 @@ export function transformSingleUser(user: IDataObject, simplify: boolean): IData
 	const transformed = { ...user };
 
 	// Transform CustomFields from array to dictionary (same as tickets/queues)
-	if (Array.isArray(transformed.CustomFields)) {
-		const customFieldsDict: IDataObject = {};
-
-		for (const field of transformed.CustomFields as IDataObject[]) {
-			const fieldName = field.name as string;
-			const fieldValues = field.values as unknown[];
-
-			if (!fieldValues || fieldValues.length === 0) {
-				customFieldsDict[fieldName] = null;
-			} else if (fieldValues.length === 1) {
-				customFieldsDict[fieldName] = fieldValues[0] as string | number | boolean;
-			} else {
-				customFieldsDict[fieldName] = fieldValues as string[];
-			}
-		}
-
-		transformed.CustomFields = simpleAlphanumericSort(customFieldsDict);
+	const normalizedUserCF = normalizeCustomFields(transformed.CustomFields);
+	if (normalizedUserCF) {
+		transformed.CustomFields = normalizedUserCF;
 	}
 
 	// Apply simplify transformations if requested
 	if (simplify) {
-		// 1. Flatten CustomFields into top-level properties
-		if (
-			transformed.CustomFields &&
-			typeof transformed.CustomFields === 'object' &&
-			!Array.isArray(transformed.CustomFields)
-		) {
-			for (const [cfKey, cfValue] of Object.entries(transformed.CustomFields)) {
-				if (Object.prototype.hasOwnProperty.call(transformed, cfKey)) {
-					transformed[`CF_${cfKey}`] = cfValue;
-				} else {
-					transformed[cfKey] = cfValue;
-				}
-			}
-			delete transformed.CustomFields;
-		}
-
-		// 2. Simplify user-like fields (if they are objects)
-		const userFieldsToSimplify = ['Creator', 'LastUpdatedBy'];
-
-		for (const field of userFieldsToSimplify) {
-			if (transformed[field] && typeof transformed[field] === 'object') {
-				transformed[field] = simplifyUserObject(transformed[field] as IDataObject);
-			}
-		}
+		Object.assign(
+			transformed,
+			simplifyResource(transformed, {
+				userFields: ['Creator', 'LastUpdatedBy'],
+				flattenCustomFields: true,
+			}),
+		);
 	}
 
-	return transformed;
+	return sortUserKeysWithPreferredOrder(transformed);
 }
 
 /**
@@ -799,7 +930,7 @@ function processSingleAttachmentContent(
 	metadata: IDataObject,
 	options: {
 		debug: boolean;
-		logger: ILogger;
+		logger: Logger;
 	},
 ): { metadata: IDataObject; binaryData?: IBinaryData } {
 	const { debug, logger } = options;
@@ -1101,7 +1232,7 @@ export async function processTransactions(
 	}
 
 	// OPTIMIZATION: Collect all transaction IDs that need attachments and fetch in bulk
-	const contentTypes = ['Comment', 'Create', 'Correspond', 'EmailRecord', 'CommentEmailRecord'];
+	const contentTypes: string[] = Array.from(TRANSACTION_CONTENT_TYPES);
 	const needsAttachments = includeAttachments || includeContent;
 	let bulkAttachmentsByTransaction = new Map<string, IDataObject[]>();
 
@@ -1447,9 +1578,14 @@ export async function processTransactions(
 				}
 
 				// Always include Attachments array and count info
-				processedItem.Attachments = attachmentsAggregate;
+				const sortedAttachments = attachmentsAggregate.sort(
+					(a, b) =>
+						String(a.Filename || '').localeCompare(String(b.Filename || '')) ||
+						String(a.id || '').localeCompare(String(b.id || '')),
+				);
+				processedItem.Attachments = sortedAttachments;
 				processedItem.AttachmentsTotal = attachmentsTotal;
-				processedItem.AttachmentsShowing = attachmentsAggregate.length;
+				processedItem.AttachmentsShowing = sortedAttachments.length;
 
 				// Preserve other fields from the transaction payload
 				for (const [key, value] of Object.entries(transaction)) {
@@ -1626,6 +1762,17 @@ export async function processAttachments(
 		processedItems.push(outputItem);
 	}
 
+	// Sort processed attachments by filename (then id) for stable ordering
+	processedItems.sort(
+		(a, b) =>
+			String((a.json as IDataObject).Filename || '').localeCompare(
+				String((b.json as IDataObject).Filename || ''),
+			) ||
+			String((a.json as IDataObject).id || '').localeCompare(
+				String((b.json as IDataObject).id || ''),
+			),
+	);
+
 	if (debug) {
 		logger.info(`[RT Debug] Processed ${processedItems.length} attachment(s)`);
 	}
@@ -1785,31 +1932,31 @@ async function processAttachmentsForUpload(
 	binaryProperties: string | undefined,
 	attachmentsJson: string | undefined,
 ): Promise<Array<{FileName: string, FileType: string, FileContent: string}> | undefined> {
-	// Debug: Log the attachment configuration
-	console.log('processAttachmentsForUpload - attachmentSource:', attachmentSource);
-	console.log('processAttachmentsForUpload - binaryProperties:', binaryProperties);
-	console.log('processAttachmentsForUpload - attachmentsJson:', attachmentsJson);
+	const debug = Boolean((context.getNode().parameters as IDataObject).nodeDebug);
+	const logger: Logger | undefined = (context as unknown as { logger?: Logger }).logger;
+	const log = (msg: string) => {
+		if (debug && logger) logger.info(`[RT Debug] ${msg}`);
+	};
+
+	log(`processAttachmentsForUpload - attachmentSource: ${attachmentSource}`);
+	log(`processAttachmentsForUpload - binaryProperties: ${binaryProperties}`);
+	log(`processAttachmentsForUpload - attachmentsJson: ${attachmentsJson ? '[provided]' : 'undefined'}`);
 
 	if (!attachmentSource || attachmentSource === 'none') {
-		console.log('processAttachmentsForUpload - No attachmentSource or "none" selected, returning undefined');
+		log('processAttachmentsForUpload - No attachmentSource or "none" selected, returning undefined');
 		return undefined;
 	}
 
 	if (attachmentSource === 'manual' && attachmentsJson) {
-		// Manual JSON input - user provides pre-encoded base64
-		// n8n may pass already-parsed array/object if using expressions
-		if (Array.isArray(attachmentsJson)) {
-			console.log('processAttachmentsForUpload - attachmentsJson is already an array, returning as-is');
-			return attachmentsJson;
-		}
-
-		// Parse JSON string
 		try {
 			const parsed = typeof attachmentsJson === 'string' ? JSON.parse(attachmentsJson) : attachmentsJson;
-			console.log('processAttachmentsForUpload - parsed attachmentsJson:', parsed);
-			return Array.isArray(parsed) ? parsed : undefined;
+			if (Array.isArray(parsed)) {
+				log('processAttachmentsForUpload - using parsed manual attachments array');
+				return parsed as Array<{FileName: string, FileType: string, FileContent: string}>;
+			}
+			return undefined;
 		} catch (error) {
-			console.log('processAttachmentsForUpload - JSON parse error:', error);
+			log(`processAttachmentsForUpload - JSON parse error: ${(error as Error).message}`);
 			throw new NodeOperationError(context.getNode(), 'Invalid JSON in Attachments field', { itemIndex: 0 });
 		}
 	}
@@ -1821,11 +1968,12 @@ async function processAttachmentsForUpload(
 	if (attachmentSource === 'allBinaryData') {
 		// Attach all binary properties
 		for (const [key, binary] of Object.entries(binaryData)) {
-			if (binary && binary.data) {
+			if (binary && (binary as IBinaryData).data) {
+				const b = binary as IBinaryData;
 				attachments.push({
-					FileName: binary.fileName || key,
-					FileType: binary.mimeType || 'application/octet-stream',
-					FileContent: binary.data, // Already base64 encoded in n8n
+					FileName: b.fileName || key,
+					FileType: b.mimeType || 'application/octet-stream',
+					FileContent: b.data, // Already base64 encoded in n8n
 				});
 			}
 		}
@@ -1833,20 +1981,22 @@ async function processAttachmentsForUpload(
 		// Attach selected binary properties (comma-separated string)
 		const properties = typeof binaryProperties === 'string'
 			? binaryProperties.split(',').map(p => p.trim()).filter(p => p)
-			: (Array.isArray(binaryProperties) ? binaryProperties : []);
+			: (Array.isArray(binaryProperties) ? (binaryProperties as string[]) : []);
 
 		for (const key of properties) {
 			const binary = binaryData[key];
-			if (binary && binary.data) {
+			if (binary && (binary as IBinaryData).data) {
+				const b = binary as IBinaryData;
 				attachments.push({
-					FileName: binary.fileName || key,
-					FileType: binary.mimeType || 'application/octet-stream',
-					FileContent: binary.data, // Already base64 encoded in n8n
+					FileName: b.fileName || key,
+					FileType: b.mimeType || 'application/octet-stream',
+					FileContent: b.data, // Already base64 encoded in n8n
 				});
 			}
 		}
 	}
 
+	log(`processAttachmentsForUpload - prepared ${attachments.length} attachment(s)`);
 	return attachments.length > 0 ? attachments : undefined;
 }
 
