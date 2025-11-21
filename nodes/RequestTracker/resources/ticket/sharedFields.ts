@@ -241,12 +241,14 @@ export function getCustomFieldsResourceMapper(): INodeProperties {
 		type: 'resourceMapper',
 		noDataExpression: true,
 		default: {
-			mappingMode: 'defineBelow',
+			mappingMode: 'mapEachColumnManually',
 			value: null,
 		},
-		description: 'Map custom field values using the resource mapper. Fetches available custom fields from RT based on the selected queue (or all fields if no queue selected).',
+		description:
+			'Map custom field values using the resource mapper. Fetches available custom fields from RT based on the resolved queue (from Queue or Ticket ID). Fields are added on demand.',
 		typeOptions: {
-			loadOptionsDependsOn: ['queue.value', 'queue'],
+			// Refresh when queue or ticket context changes
+			loadOptionsDependsOn: ['queue.value', 'queue', 'updateFields.queue', 'updateFields.queue.value', 'ticketId'],
 			resourceMapper: {
 				resourceMapperMethod: 'getMappingColumns',
 				mode: 'add',
@@ -254,9 +256,10 @@ export function getCustomFieldsResourceMapper(): INodeProperties {
 					singular: 'custom field',
 					plural: 'custom fields',
 				},
-				addAllFields: true,
+				// Prevent auto-populating empty fields on initial load
+				addAllFields: false,
 				multiKeyMatch: false,
-				supportAutoMap: true,
+				supportAutoMap: false,
 			},
 		},
 	};

@@ -8,57 +8,7 @@ import type {
 /**
  * Helper function to fetch values for Select/Combobox custom fields
  */
-async function fetchCustomFieldValues(
-	context: ILoadOptionsFunctions,
-	customFieldId: string,
-	baseUrl: string,
-	skipSslCertificateValidation: boolean,
-): Promise<Array<{ name: string; value: string }>> {
-	const requestOptions: IHttpRequestOptions = {
-		method: 'POST',
-		url: `${baseUrl}/REST/2.0/customfield/${customFieldId}/values`,
-		headers: {
-			'Content-Type': 'application/json',
-		},
-		qs: {
-			per_page: 100, // Most custom fields won't have more than 100 values
-			fields: 'id,Name,Description,SortOrder',
-		},
-		body: [
-			// Get all values (no filter)
-			{ field: 'id', operator: '>', value: '0' },
-		],
-		json: true,
-		skipSslCertificateValidation,
-	};
-
-	const response = (await context.helpers.httpRequestWithAuthentication.call(
-		context,
-		'requestTrackerApi',
-		requestOptions,
-	)) as {
-		items: Array<{
-			id: string;
-			Name: string;
-			Description?: string;
-			SortOrder?: number;
-		}>;
-	};
-
-	// Transform to options format expected by resourceMapper
-	// Sort by SortOrder if available
-	const items = response.items || [];
-	items.sort((a, b) => {
-		const orderA = a.SortOrder ?? 999999;
-		const orderB = b.SortOrder ?? 999999;
-		return orderA - orderB;
-	});
-
-	return items.map((value) => ({
-		name: value.Name,
-		value: value.Name, // RT uses the Name as the value when setting custom fields
-	}));
-}
+/* Removed value fetching for performance: Select/Combobox values are no longer retrieved */
 
 export const resourceMapping = {
 	/**
@@ -67,7 +17,7 @@ export const resourceMapping = {
 	 * - If Queue parameter is set: Fetch queue-specific custom fields
 	 * - Otherwise: Fetch all custom fields (fallback)
 	 *
-	 * For Select/Combobox fields, also fetches possible values from RT
+	 * Select/Combobox fields are rendered as plain text inputs for performance
 	 */
 	async getMappingColumns(this: ILoadOptionsFunctions): Promise<ResourceMapperFields> {
 		try {
@@ -76,31 +26,92 @@ export const resourceMapping = {
 			const baseUrl = (credentials.rtInstanceUrl as string).replace(/\/$/, '');
 			const skipSslCertificateValidation = credentials.allowUnauthorizedCerts === true;
 
-			// Determine endpoint based on Queue parameter
+			// Determine endpoint based on Queue parameter or ticket context
 			let endpoint = '/customfields';
 			let queueId: string | undefined;
 
-			// Try to get queue parameter - it might be in different formats
+			// 1) Create op: Queue at top-level
 			try {
 				const queueParam = this.getNodeParameter('queue', 0, undefined) as
-				| string
-				| { value: string }
-				| undefined;
+					| string
+					| { value?: string }
+					| undefined;
 				if (queueParam) {
-					// Handle resourceLocator format
 					if (typeof queueParam === 'object' && queueParam.value) {
-						queueId = queueParam.value;
+						queueId = String(queueParam.value);
 					} else if (typeof queueParam === 'string') {
 						queueId = queueParam;
 					}
 				}
 			} catch {
-				// Queue parameter not available - will use fallback endpoint
+				// Queue parameter may not exist in this operation context - ignore
+				void 0;
 			}
 
-			// Use queue-specific endpoint if queue is available
+			// 2) Update op: Queue inside updateFields
+			if (!queueId) {
+				try {
+					const updateQueueParam = this.getNodeParameter('updateFields.queue', 0, undefined) as
+						| string
+						| { value?: string }
+						| undefined;
+					if (updateQueueParam) {
+						if (typeof updateQueueParam === 'object' && updateQueueParam.value) {
+							queueId = String(updateQueueParam.value);
+						} else if (typeof updateQueueParam === 'string') {
+							queueId = updateQueueParam;
+						}
+					}
+				} catch {
+					// updateFields may not be present (e.g., create op) - ignore
+					void 0;
+				}
+			}
+
+			// 3) If no explicit queue but ticketId present, fetch the ticket to resolve its Queue
+			if (!queueId) {
+				try {
+					const ticketId = this.getNodeParameter('ticketId', 0, undefined) as string | undefined;
+					if (ticketId && String(ticketId).trim().length > 0) {
+						const requestOptions: IHttpRequestOptions = {
+							method: 'GET',
+							url: `${baseUrl}/REST/2.0/ticket/${ticketId}`,
+							qs: {
+								fields: 'Queue',
+								'fields[Queue]': 'id,Name',
+							},
+							json: true,
+							skipSslCertificateValidation,
+						};
+						const ticketResponse = (await this.helpers.httpRequestWithAuthentication.call(
+							this,
+							'requestTrackerApi',
+							requestOptions,
+						)) as { Queue?: { id?: string | number; Name?: string } | string | number };
+
+						if (ticketResponse && ticketResponse.Queue) {
+							if (typeof ticketResponse.Queue === 'object') {
+								if (ticketResponse.Queue.id !== undefined) {
+									queueId = String(ticketResponse.Queue.id);
+								} else if (ticketResponse.Queue.Name) {
+									queueId = String(ticketResponse.Queue.Name);
+								}
+							} else {
+								queueId = String(ticketResponse.Queue);
+							}
+						}
+					}
+				} catch {
+					// Ignore resolution errors; fallback to global custom fields
+				}
+			}
+
+			// Use queue-specific endpoint if queue is available; otherwise, return no fields to avoid fetching all
 			if (queueId) {
 				endpoint = `/queue/${queueId}/customfields`;
+			} else {
+				// No queue context yet (e.g., first open) - do not fetch global custom fields
+				return { fields: [] };
 			}
 
 			// Fetch custom fields from RT API
@@ -145,7 +156,7 @@ export const resourceMapping = {
 				(response.items || []).map(async (field) => {
 					// Map RT custom field types to n8n resourceMapper types
 					let mappedType: ResourceMapperField['type'] = 'string';
-					let options: Array<{ name: string; value: string }> | undefined;
+					/* options removed for performance */
 
 					switch (field.Type) {
 						case 'Date':
@@ -157,18 +168,9 @@ export const resourceMapping = {
 							break;
 						case 'Select':
 						case 'Combobox':
+							// Do not fetch allowed values; render as plain string input for speed
 							mappedType = 'string';
-							// Fetch possible values for Select/Combobox fields
-							try {
-								options = await fetchCustomFieldValues(
-									this,
-									field.id,
-									baseUrl,
-									skipSslCertificateValidation,
-								);
-							} catch {
-								// Continue without options if fetch fails
-							}
+							// No options attached
 							break;
 						case 'Text':
 						case 'Wikitext':
@@ -189,10 +191,7 @@ export const resourceMapping = {
 						display: true, // Always display custom fields
 					};
 
-					// Add options for Select/Combobox fields
-					if (options && options.length > 0) {
-						resourceField.options = options;
-					}
+					/* No options attached for Select/Combobox fields */
 
 					return resourceField;
 				}),
