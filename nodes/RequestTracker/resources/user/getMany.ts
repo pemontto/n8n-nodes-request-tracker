@@ -87,6 +87,13 @@ export const userGetManyDescription: INodeProperties[] = [
 				default: 'Name',
 				description: 'Field to sort users by (default: Name)',
 			},
+			{
+				displayName: 'Include All Users',
+				name: 'includeAllUsers',
+				type: 'boolean',
+				default: false,
+				description: 'Whether to include all users instead of privileged users only',
+			},
 		],
 	},
 	{

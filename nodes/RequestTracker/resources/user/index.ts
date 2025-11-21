@@ -51,7 +51,7 @@ export const userDescription: INodeProperties[] = [
 				routing: {
 					request: {
 						method: 'GET',
-						url: '/users',
+						url: '={{ $parameter.additionalOptions?.includeAllUsers ? "/users" : "/users/privileged" }}',
 						qs: {
 							query: '={{ JSON.stringify([...($parameter.filters?.username ? [{ field: "Name", operator: "LIKE", value: $parameter.filters.username }] : []), ...($parameter.filters?.email ? [{ field: "EmailAddress", operator: "LIKE", value: $parameter.filters.email, entry_aggregator: "AND" }] : [])]) }}',
 							fields: 'id,Name,CustomFields,EmailAddress,RealName,NickName,Organization,HomePhone,WorkPhone,MobilePhone,PagerPhone,Address1,Address2,City,State,Zip,Country,Gecos,Lang,Timezone,Comments,Signature,Creator,Created,LastUpdatedBy,LastUpdated',
