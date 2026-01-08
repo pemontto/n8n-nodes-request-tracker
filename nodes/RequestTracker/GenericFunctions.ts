@@ -485,14 +485,14 @@ export function transformSingleTicket(ticket: IDataObject, simplify: boolean): I
 	// Apply simplify transformations if requested
 	if (simplify) {
 		// Flatten CustomFields and simplify user fields/arrays
-		Object.assign(
-			transformed,
-			simplifyResource(transformed, {
-				userFields: USER_FIELDS,
-				userArrayFields: USER_ARRAY_FIELDS,
-				flattenCustomFields: true,
-			}),
-		);
+		const simplified = simplifyResource(transformed, {
+			userFields: USER_FIELDS,
+			userArrayFields: USER_ARRAY_FIELDS,
+			flattenCustomFields: true,
+		});
+		// Replace transformed with simplified (which has CustomFields deleted and flattened)
+		Object.keys(transformed).forEach((key) => delete transformed[key]);
+		Object.assign(transformed, simplified);
 
 		// Simplify Queue to just the name
 		if (
@@ -523,13 +523,12 @@ export function transformSingleQueue(queue: IDataObject, simplify: boolean): IDa
 
 	// Apply simplify transformations if requested
 	if (simplify) {
-		Object.assign(
-			transformed,
-			simplifyResource(transformed, {
-				userFields: ['Creator', 'LastUpdatedBy'],
-				flattenCustomFields: true,
-			}),
-		);
+		const simplified = simplifyResource(transformed, {
+			userFields: ['Creator', 'LastUpdatedBy'],
+			flattenCustomFields: true,
+		});
+		Object.keys(transformed).forEach((key) => delete transformed[key]);
+		Object.assign(transformed, simplified);
 	}
 
 	return sortQueueKeysWithPreferredOrder(transformed);
@@ -570,13 +569,12 @@ export function transformSingleUser(user: IDataObject, simplify: boolean): IData
 
 	// Apply simplify transformations if requested
 	if (simplify) {
-		Object.assign(
-			transformed,
-			simplifyResource(transformed, {
-				userFields: ['Creator', 'LastUpdatedBy'],
-				flattenCustomFields: true,
-			}),
-		);
+		const simplified = simplifyResource(transformed, {
+			userFields: ['Creator', 'LastUpdatedBy'],
+			flattenCustomFields: true,
+		});
+		Object.keys(transformed).forEach((key) => delete transformed[key]);
+		Object.assign(transformed, simplified);
 	}
 
 	return sortUserKeysWithPreferredOrder(transformed);
@@ -617,8 +615,12 @@ export async function transformTicketData(
 	this: IExecuteSingleFunctions,
 	items: INodeExecutionData[],
 ): Promise<INodeExecutionData[]> {
-	// Get the simplify parameter from the node (defaults to false if not present)
-	const simplify = this.getNodeParameter('simplify', false) as boolean;
+	let simplify = false;
+	try {
+		simplify = this.getNodeParameter('simplify', false) as boolean;
+	} catch {
+		// Simplify parameter may not exist
+	}
 
 	return items.map((item) => {
 		const transformed = transformSingleTicket(item.json, simplify);
@@ -1867,47 +1869,47 @@ export async function debugPostReceiveResponse(
 
 /**
  * PreSend hook to merge CustomFields from multiple formats
- * Supports: resourceMapper (customFieldsUi), JSON (customFields), and Collection (customFieldsCollection)
- * Priority order: resourceMapper > collection > JSON (later formats override earlier ones)
+ * Supports:
+ * - resourceMapper (customFieldsUi) at top level
+ * - JSON (customFields) in additionalFields/updateFields
+ * Priority order: JSON (base) < resourceMapper (highest priority)
  */
 export async function mergeCustomFieldsPreSend(
 	this: IExecuteSingleFunctions,
 	requestOptions: IHttpRequestOptions,
 ): Promise<IHttpRequestOptions> {
-	// Get the parameter container based on the operation
-	const operation = this.getNodeParameter("operation", 0) as string;
-	let parameterName = "additionalFields";
-	if (operation === "update") {
-		parameterName = "updateFields";
+	const operation = this.getNodeParameter('operation', 0) as string;
+	const containerName = operation === 'update' ? 'updateFields' : 'additionalFields';
+
+	// Get customFields (JSON format) from inside additionalFields or updateFields
+	let customFieldsJson: Record<string, unknown> | undefined;
+	try {
+		const container = this.getNodeParameter(containerName, 0) as Record<string, unknown> | undefined;
+		const rawJson = container?.customFields as string | undefined;
+		if (typeof rawJson === 'string' && rawJson.trim().length > 0 && rawJson.trim() !== '{}') {
+			customFieldsJson = JSON.parse(rawJson);
+		}
+	} catch {
+		// customFields parameter may not exist or be empty
 	}
 
-	const fields = this.getNodeParameter(parameterName, 0, {}) as {
-		customFields?: string | Record<string, unknown>;
-		customFieldsCollection?: { fields?: Array<{ name: string; value: string }> };
-		customFieldsUi?: {
+	// Get customFieldsUi (resourceMapper format) at top level
+	let resourceMapperValues: Record<string, unknown> | null = null;
+	try {
+		const customFieldsUi = this.getNodeParameter('customFieldsUi', 0) as {
 			mappingMode?: string;
 			value?: Record<string, unknown> | null;
-		};
-	};
+		} | undefined;
+		if (customFieldsUi?.value && typeof customFieldsUi.value === 'object') {
+			resourceMapperValues = customFieldsUi.value;
+		}
+	} catch {
+		// customFieldsUi parameter may not exist
+	}
 
-	// Parse JSON if it is a string
-	const json = typeof fields.customFields === "string" && fields.customFields.trim().length > 0
-		? JSON.parse(fields.customFields)
-		: fields.customFields;
-
-	// Convert collection to object
-	const collection = fields.customFieldsCollection?.fields?.reduce((acc: Record<string, string>, f: { name: string; value: string }) => {
-		acc[f.name] = f.value;
-		return acc;
-	}, {} as Record<string, string>);
-
-	// Get resourceMapper values if present
-	const resourceMapperValues = fields.customFieldsUi?.value || null;
-
-	// Merge all three formats with priority: JSON (base) < collection < resourceMapper (highest)
+	// Merge formats with priority: JSON (base) < resourceMapper (highest)
 	const merged = {
-		...(json || {}),
-		...(collection || {}),
+		...(customFieldsJson || {}),
 		...(resourceMapperValues || {}),
 	};
 
@@ -2064,8 +2066,8 @@ export async function buildRequestBodyPreSend(
 
 		// ContentType only if Content is provided
 		if (content) {
-			const additionalFields = this.getNodeParameter('additionalFields', 0, {}) as Record<string, unknown>;
-			body.ContentType = additionalFields.contentType || 'text/html';
+			const contentType = this.getNodeParameter('contentType', 0) as string | undefined;
+			body.ContentType = contentType || 'text/html';
 		}
 
 		// Additional fields
@@ -2117,8 +2119,8 @@ export async function buildRequestBodyPreSend(
 	} else if (operation === 'addComment' || operation === 'addCorrespondence') {
 		// Required content field
 		body.Content = this.getNodeParameter('content', 0) as string;
-		const contentType = this.getNodeParameter('contentType', 0) as string | undefined;
-		body.ContentType = contentType || 'text/html';
+		const options = this.getNodeParameter('options', 0, {}) as Record<string, unknown>;
+		body.ContentType = (options.contentType as string) || 'text/html';
 
 		// Additional fields
 		const additionalFields = this.getNodeParameter('additionalFields', 0, {}) as Record<string, unknown>;
