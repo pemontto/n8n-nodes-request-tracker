@@ -1,6 +1,6 @@
-# n8n-nodes-request-tracker
+<img src="https://raw.githubusercontent.com/pemontto/n8n-nodes-request-tracker/main/icons/request-tracker.svg" width="120" alt="Request Tracker Logo" />
 
-![Request Tracker Logo](icons/request-tracker.svg)
+# n8n-nodes-request-tracker
 
 Community node for Request Tracker (RT 5+) providing comprehensive access to the REST2 API in n8n workflows.
 
