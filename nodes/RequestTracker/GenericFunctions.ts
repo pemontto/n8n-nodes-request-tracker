@@ -1868,54 +1868,105 @@ export async function debugPostReceiveResponse(
 
 
 /**
- * PreSend hook to merge CustomFields from multiple formats
- * Supports:
- * - resourceMapper (customFieldsUi) at top level
- * - JSON (customFields) in additionalFields/updateFields
- * Priority order: JSON (base) < resourceMapper (highest priority)
+ * Safely get a node parameter, returning undefined if it doesn't exist.
+ */
+function safeGetNodeParameter<T>(
+	context: IExecuteSingleFunctions,
+	parameterName: string,
+	fallback: T,
+): T {
+	try {
+		return context.getNodeParameter(parameterName, 0) as T;
+	} catch {
+		return fallback;
+	}
+}
+
+/**
+ * Extract custom fields from the JSON input (inside additionalFields or updateFields).
+ *
+ * The JSON input is a string like: '{"Service": "SIEM", "Severity": "High"}'
+ * Returns the parsed object, or empty object if not provided/invalid.
+ */
+function getCustomFieldsFromJson(
+	context: IExecuteSingleFunctions,
+	containerName: string,
+): Record<string, unknown> {
+	const container = safeGetNodeParameter<Record<string, unknown> | undefined>(
+		context,
+		containerName,
+		undefined,
+	);
+	const rawJson = container?.customFields as string | undefined;
+
+	if (typeof rawJson !== 'string' || rawJson.trim() === '' || rawJson.trim() === '{}') {
+		return {};
+	}
+
+	try {
+		return JSON.parse(rawJson) as Record<string, unknown>;
+	} catch {
+		return {};
+	}
+}
+
+/**
+ * Extract custom fields from the resourceMapper UI component.
+ *
+ * n8n's resourceMapper stores values in this structure:
+ *   customFieldsUi = {
+ *     mappingMode: 'defineBelow' | 'autoMapInputData',
+ *     value: { "FieldName": "value", ... }  // <-- this is what we want
+ *   }
+ *
+ * Returns the value object, or empty object if not provided.
+ */
+function getCustomFieldsFromResourceMapper(
+	context: IExecuteSingleFunctions,
+): Record<string, unknown> {
+	const customFieldsUi = safeGetNodeParameter<{
+		mappingMode?: string;
+		value?: Record<string, unknown> | null;
+	} | undefined>(context, 'customFieldsUi', undefined);
+
+	if (customFieldsUi?.value && typeof customFieldsUi.value === 'object') {
+		return customFieldsUi.value;
+	}
+
+	return {};
+}
+
+/**
+ * PreSend hook to merge CustomFields from multiple input formats.
+ *
+ * Users can provide custom fields via two methods:
+ *   1. Resource Mapper UI (customFieldsUi) - visual field picker at top level
+ *   2. JSON input (customFields) - raw JSON inside additionalFields/updateFields
+ *
+ * If both are provided, resourceMapper values take precedence (they're more explicit).
+ * The merged result is added to the request body as: { CustomFields: { ... } }
  */
 export async function mergeCustomFieldsPreSend(
 	this: IExecuteSingleFunctions,
 	requestOptions: IHttpRequestOptions,
 ): Promise<IHttpRequestOptions> {
+	// Determine which container holds the JSON custom fields based on operation
 	const operation = this.getNodeParameter('operation', 0) as string;
 	const containerName = operation === 'update' ? 'updateFields' : 'additionalFields';
 
-	// Get customFields (JSON format) from inside additionalFields or updateFields
-	let customFieldsJson: Record<string, unknown> | undefined;
-	try {
-		const container = this.getNodeParameter(containerName, 0) as Record<string, unknown> | undefined;
-		const rawJson = container?.customFields as string | undefined;
-		if (typeof rawJson === 'string' && rawJson.trim().length > 0 && rawJson.trim() !== '{}') {
-			customFieldsJson = JSON.parse(rawJson);
-		}
-	} catch {
-		// customFields parameter may not exist or be empty
-	}
+	// Get custom fields from both sources
+	const fromJson = getCustomFieldsFromJson(this, containerName);
+	const fromResourceMapper = getCustomFieldsFromResourceMapper(this);
 
-	// Get customFieldsUi (resourceMapper format) at top level
-	let resourceMapperValues: Record<string, unknown> | null = null;
-	try {
-		const customFieldsUi = this.getNodeParameter('customFieldsUi', 0) as {
-			mappingMode?: string;
-			value?: Record<string, unknown> | null;
-		} | undefined;
-		if (customFieldsUi?.value && typeof customFieldsUi.value === 'object') {
-			resourceMapperValues = customFieldsUi.value;
-		}
-	} catch {
-		// customFieldsUi parameter may not exist
-	}
+	// Merge: JSON provides base values, resourceMapper overrides
+	const merged = { ...fromJson, ...fromResourceMapper };
 
-	// Merge formats with priority: JSON (base) < resourceMapper (highest)
-	const merged = {
-		...(customFieldsJson || {}),
-		...(resourceMapperValues || {}),
-	};
-
-	// Only add CustomFields if there is something to add
+	// Add to request body if we have any custom fields
 	if (Object.keys(merged).length > 0) {
-		requestOptions.body = { ...(requestOptions.body as Record<string, unknown>), CustomFields: merged };
+		requestOptions.body = {
+			...(requestOptions.body as Record<string, unknown>),
+			CustomFields: merged,
+		};
 	}
 
 	return requestOptions;
