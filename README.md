@@ -1,5 +1,7 @@
 # n8n-nodes-request-tracker
 
+![Request Tracker Logo](icons/request-tracker.svg)
+
 Community node for Request Tracker (RT 5+) providing comprehensive access to the REST2 API in n8n workflows.
 
 [n8n](https://n8n.io/) is a fair-code licensed workflow automation platform.
