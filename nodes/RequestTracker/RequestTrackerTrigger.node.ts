@@ -99,7 +99,7 @@ export class RequestTrackerTrigger implements INodeType {
 						displayName: 'Simplify Output',
 						name: 'simplify',
 						type: 'boolean',
-						default: false,
+						default: true,
 						description: 'Whether to simplify the output (flatten nested fields, remove metadata, etc.)',
 					},
 				],
@@ -119,7 +119,7 @@ export class RequestTrackerTrigger implements INodeType {
 		const options = this.getNodeParameter('options', 0, {}) as IDataObject;
 		const outputFields = (options.outputFields as string) || getTicketFields();
 		const limit = (options.limit as number) || 50;
-		const simplify = (options.simplify as boolean) || false;
+		const simplify = options.simplify !== false;  // Default to true
 
 		// Format date for RT API (YYYY-MM-DD HH:mm:ss)
 		const rtDateFormat = (date: Date): string => {
@@ -200,9 +200,6 @@ export class RequestTrackerTrigger implements INodeType {
 					{
 						method: 'POST',
 						url: `${baseUrl}/REST/2.0/tickets`,
-						headers: {
-							'Content-Type': 'application/x-www-form-urlencoded',
-						},
 						qs: {
 							fields: outputFields,
 							...getExpandedFieldParams(),
@@ -211,7 +208,8 @@ export class RequestTrackerTrigger implements INodeType {
 							per_page: perPage,
 							page: page,
 						},
-						body: { query },
+						// URLSearchParams auto-sets Content-Type: application/x-www-form-urlencoded
+						body: new URLSearchParams({ query }),
 						json: true,
 						skipSslCertificateValidation: allowUnauthorizedCerts,
 					},
