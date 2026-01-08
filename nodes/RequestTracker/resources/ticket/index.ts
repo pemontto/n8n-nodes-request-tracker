@@ -112,7 +112,7 @@ export const ticketDescription: INodeProperties[] = [
 						url: '=/ticket/{{$parameter.ticketId}}/comment',
 					},
 					send: {
-						preSend: [debugPreSendRequest, buildRequestBodyPreSend, mergeCustomFieldsPreSend, debugPreSendRequest],
+						preSend: [buildRequestBodyPreSend, mergeCustomFieldsPreSend, debugPreSendRequest],
 					},
 					output: {
 						postReceive: [
@@ -133,7 +133,7 @@ export const ticketDescription: INodeProperties[] = [
 						url: '=/ticket/{{$parameter.ticketId}}/correspond',
 					},
 					send: {
-						preSend: [buildRequestBodyPreSend, mergeCustomFieldsPreSend],
+						preSend: [buildRequestBodyPreSend, mergeCustomFieldsPreSend, debugPreSendRequest],
 					},
 					output: {
 						postReceive: [
