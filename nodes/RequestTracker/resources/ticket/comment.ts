@@ -1,10 +1,10 @@
 import type { INodeProperties } from 'n8n-workflow';
 import {
-	getContentFields,
 	getBasicTicketFields,
 	getStatusField,
 	getTimeTakenField,
-	getCustomFieldsCollection,
+	getCustomFieldsNotice,
+	getCustomFieldsResourceMapper,
 	getCustomFieldsJson,
 	getAttachmentsField,
 } from './sharedFields';
@@ -29,10 +29,24 @@ function getCommentCorrespondDescription(operation: 'addComment' | 'addCorrespon
 			description: `The numeric ID of the ticket to add ${operationLabel} to`,
 			displayOptions: { show: showOnlyFor },
 		},
-		...getContentFields(showOnlyFor).map((field, index) => ({
-			...field,
-			required: index === 0, // Content field is required
-		})),
+		{
+			displayName: 'Content',
+			name: 'content',
+			type: 'string',
+			typeOptions: {
+				rows: 4,
+			},
+			default: '',
+			required: true,
+			description: 'The content/message text',
+			displayOptions: { show: showOnlyFor },
+		},
+		// Custom Fields section - at top level for visibility
+		getCustomFieldsNotice(showOnlyFor),
+		{
+			...getCustomFieldsResourceMapper(),
+			displayOptions: { show: showOnlyFor },
+		},
 		{
 			displayName: 'Additional Fields',
 			name: 'additionalFields',
@@ -46,10 +60,36 @@ function getCommentCorrespondDescription(operation: 'addComment' | 'addCorrespon
 				getStatusField(),
 				getTimeTakenField(),
 				getCustomFieldsJson(),
-				getCustomFieldsCollection(),
 			],
 		},
 		...getAttachmentsField(showOnlyFor),
+		{
+			displayName: 'Options',
+			name: 'options',
+			type: 'collection',
+			placeholder: 'Add Option',
+			default: {},
+			displayOptions: { show: showOnlyFor },
+			options: [
+				{
+					displayName: 'Content Type',
+					name: 'contentType',
+					type: 'options',
+					options: [
+						{
+							name: 'Text/HTML',
+							value: 'text/html',
+						},
+						{
+							name: 'Text/Plain',
+							value: 'text/plain',
+						},
+					],
+					default: 'text/html',
+					description: 'MIME type for the content',
+				},
+			],
+		},
 	] as INodeProperties[];
 }
 

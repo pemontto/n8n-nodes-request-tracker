@@ -8,8 +8,8 @@ import {
 	getQueueField,
 	getStatusField,
 	getOwnerField,
+	getCustomFieldsNotice,
 	getCustomFieldsResourceMapper,
-	getCustomFieldsCollection,
 	getCustomFieldsJson,
 } from './sharedFields';
 
@@ -47,9 +47,13 @@ export const ticketUpdateDescription: INodeProperties[] = [
 			...getDateFields(),
 			...getTimeFields(),
 			getSLAField(),
-			getCustomFieldsResourceMapper(),
 			getCustomFieldsJson(),
-			getCustomFieldsCollection(),
 		],
+	},
+	// Custom Fields section - at top level for visibility
+	getCustomFieldsNotice(showOnlyForTicketUpdate),
+	{
+		...getCustomFieldsResourceMapper(),
+		displayOptions: { show: showOnlyForTicketUpdate },
 	},
 ];

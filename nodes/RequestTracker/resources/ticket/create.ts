@@ -8,8 +8,8 @@ import {
 	getQueueField,
 	getStatusField,
 	getOwnerField,
+	getCustomFieldsNotice,
 	getCustomFieldsResourceMapper,
-	getCustomFieldsCollection,
 	getCustomFieldsJson,
 	getAttachmentsField,
 } from './sharedFields';
@@ -23,7 +23,7 @@ export const ticketCreateDescription: INodeProperties[] = [
 	{
 		...getQueueField(showOnlyForTicketCreate),
 		required: true,
-		description: 'The queue name or ID where the ticket will be created',
+		description: 'The queue where the ticket will be created',
 	},
 	{
 		displayName: 'Subject',
@@ -43,6 +43,24 @@ export const ticketCreateDescription: INodeProperties[] = [
 		displayOptions: { show: showOnlyForTicketCreate },
 	},
 	{
+		displayName: 'Content Type',
+		name: 'contentType',
+		type: 'options',
+		options: [
+			{
+				name: 'Text/HTML',
+				value: 'text/html',
+			},
+			{
+				name: 'Text/Plain',
+				value: 'text/plain',
+			},
+		],
+		default: 'text/html',
+		description: 'MIME type for the ticket content',
+		displayOptions: { show: showOnlyForTicketCreate },
+	},
+	{
 		displayName: 'Content',
 		name: 'content',
 		type: 'string',
@@ -53,6 +71,12 @@ export const ticketCreateDescription: INodeProperties[] = [
 		description: 'The initial content/description of the ticket',
 		displayOptions: { show: showOnlyForTicketCreate },
 	},
+	// Custom Fields section - at top level for visibility
+	getCustomFieldsNotice(showOnlyForTicketCreate),
+	{
+		...getCustomFieldsResourceMapper(),
+		displayOptions: { show: showOnlyForTicketCreate },
+	},
 	{
 		displayName: 'Additional Fields',
 		name: 'additionalFields',
@@ -61,23 +85,6 @@ export const ticketCreateDescription: INodeProperties[] = [
 		default: {},
 		displayOptions: { show: showOnlyForTicketCreate },
 		options: [
-			{
-				displayName: 'Content Type',
-				name: 'contentType',
-				type: 'options',
-				options: [
-					{
-						name: 'Text/HTML',
-						value: 'text/html',
-					},
-					{
-						name: 'Text/Plain',
-						value: 'text/plain',
-					},
-				],
-				default: 'text/html',
-				description: 'MIME type for the ticket content',
-			},
 			...getBasicTicketFields().filter(f => f.name !== 'subject'), // Subject is already a top-level required field
 			getStatusField(),
 			getOwnerField(),
@@ -85,19 +92,8 @@ export const ticketCreateDescription: INodeProperties[] = [
 			...getDateFields(),
 			...getTimeFields().filter(f => f.name === 'timeEstimated'), // Only timeEstimated for create
 			getSLAField(),
-			getCustomFieldsResourceMapper(),
 			getCustomFieldsJson(),
-			getCustomFieldsCollection(),
 		],
 	},
 	...getAttachmentsField(showOnlyForTicketCreate),
-	{
-		displayName: 'Simplify',
-		name: 'simplify',
-		type: 'boolean',
-		default: true,
-		description:
-			'Whether to simplify the response by flattening custom fields and converting user/queue objects to readable strings',
-		displayOptions: { show: showOnlyForTicketCreate },
-	},
 ];

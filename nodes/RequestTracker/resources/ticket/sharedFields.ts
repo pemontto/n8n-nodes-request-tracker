@@ -160,16 +160,16 @@ export function getQueueField(displayOptions: { resource: string[]; operation: s
 				},
 			},
 			{
-				displayName: 'By Name or ID',
+				displayName: 'By Name',
 				name: 'name',
 				type: 'string',
-				placeholder: 'e.g., General or 1',
+				placeholder: 'e.g., General',
 				validation: [
 					{
 						type: 'regex',
 						properties: {
 							regex: '.+',
-							errorMessage: 'Queue name or ID is required',
+							errorMessage: 'Queue name is required',
 						},
 					},
 				],
@@ -234,6 +234,16 @@ export function getStatusField(): INodeProperties {
 	};
 }
 
+export function getCustomFieldsNotice(displayOptions: { resource: string[]; operation: string[] }): INodeProperties {
+	return {
+		displayName: '<b>Custom Fields</b> — Map custom field values from your input data or define them manually below.',
+		name: 'customFieldsNotice',
+		type: 'notice',
+		default: '',
+		displayOptions: { show: displayOptions },
+	};
+}
+
 export function getCustomFieldsResourceMapper(): INodeProperties {
 	return {
 		displayName: 'Custom Fields',
@@ -241,14 +251,15 @@ export function getCustomFieldsResourceMapper(): INodeProperties {
 		type: 'resourceMapper',
 		noDataExpression: true,
 		default: {
-			mappingMode: 'mapEachColumnManually',
-			value: null,
+			mappingMode: 'defineBelow',
+			value: {},
 		},
 		description:
-			'Map custom field values using the resource mapper. Fetches available custom fields from RT based on the resolved queue (from Queue or Ticket ID). Fields are added on demand.',
+			'Set custom field values for the ticket. Use Auto-map to match incoming data fields by name, or Define manually to select specific fields.',
 		typeOptions: {
-			// Refresh when queue or ticket context changes
-			loadOptionsDependsOn: ['queue.value', 'queue', 'updateFields.queue', 'updateFields.queue.value', 'ticketId'],
+			// Refresh when queue changes (for Create) or queue/ticket changes (for Update)
+			// For Update: updateFields.queue takes priority over ticket's current queue
+			loadOptionsDependsOn: ['queue.value', 'updateFields.queue.value', 'ticketId'],
 			resourceMapper: {
 				resourceMapperMethod: 'getMappingColumns',
 				mode: 'add',
@@ -256,47 +267,10 @@ export function getCustomFieldsResourceMapper(): INodeProperties {
 					singular: 'custom field',
 					plural: 'custom fields',
 				},
-				// Prevent auto-populating empty fields on initial load
 				addAllFields: false,
-				multiKeyMatch: false,
-				supportAutoMap: false,
+				multiKeyMatch: true,
 			},
 		},
-	};
-}
-
-export function getCustomFieldsCollection(): INodeProperties {
-	return {
-		displayName: 'Custom Fields (Collection)',
-		name: 'customFieldsCollection',
-		type: 'fixedCollection',
-		typeOptions: {
-			multipleValues: true,
-		},
-		default: {},
-		description: 'Custom field values as name/value pairs (UI format). Takes precedence over Custom Fields (JSON) for duplicate fields.',
-		options: [
-			{
-				name: 'fields',
-				displayName: 'Field',
-				values: [
-					{
-						displayName: 'Field Name',
-						name: 'name',
-						type: 'string',
-						default: '',
-						description: 'The name of the custom field (e.g., "Action Performed", "Service")',
-					},
-					{
-						displayName: 'Field Value',
-						name: 'value',
-						type: 'string',
-						default: '',
-						description: 'The value for the custom field',
-					},
-				],
-			},
-		],
 	};
 }
 
@@ -319,23 +293,6 @@ export function getTimeTakenField(): INodeProperties {
 		default: '',
 		description: 'Time taken for this action in minutes (e.g., "30" for 30 minutes)',
 	};
-}
-
-/**
- * Helper to build CustomFields object by merging JSON and collection formats
- * 1. Start with customFields (JSON) if provided (as base)
- * 2. Overlay customFieldsCollection on top (collection takes precedence)
- * Returns undefined if neither is provided
- *
- * Just uses spread operator - much simpler!
- *
- * @param basePath - The base parameter path (e.g., '$parameter.additionalFields' or '$parameter.updateFields')
- */
-export function buildCustomFieldsExpression(basePath: string = '$parameter'): string {
-	const json = `${basePath}?.customFields`;
-	const collection = `${basePath}?.customFieldsCollection?.fields?.reduce((acc, f) => { acc[f.name] = f.value; return acc; }, {})`;
-
-	return `Object.keys({ ...(${json} || {}), ...(${collection} || {}) }).length > 0 ? { ...(${json} || {}), ...(${collection} || {}) } : undefined`;
 }
 
 export function getAttachmentsField(displayOptions: { resource: string[]; operation: string[] }): INodeProperties[] {
@@ -400,3 +357,4 @@ export function getAttachmentsField(displayOptions: { resource: string[]; operat
 		},
 	];
 }
+
