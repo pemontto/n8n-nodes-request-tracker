@@ -16,7 +16,9 @@ Community node for Request Tracker (RT 5+) providing comprehensive access to the
 
 ## Installation
 
-Follow the official guide for installing community nodes: https://docs.n8n.io/integrations/community-nodes/installation/
+Install via **Settings > Community Nodes** in n8n and search for `n8n-nodes-request-tracker`.
+
+See the [n8n community nodes documentation](https://docs.n8n.io/integrations/community-nodes/installation/) for more details.
 
 ## Implemented Nodes & Operations
 
