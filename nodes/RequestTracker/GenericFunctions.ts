@@ -1208,6 +1208,111 @@ async function fetchAttachmentsBulk(
 }
 
 /**
+ * Fetch custom field metadata in bulk using POST /customfields with IN operator
+ * Returns a Map of id→name for efficient lookup
+ */
+async function fetchCustomFieldsBulk(
+	this: IExecuteSingleFunctions,
+	customFieldIds: string[],
+): Promise<Map<string, string>> {
+	const debug = this.getNodeParameter('nodeDebug', false) as boolean;
+	const logger = this.logger;
+
+	if (customFieldIds.length === 0) {
+		return new Map();
+	}
+
+	const credentials = await this.getCredentials('requestTrackerApi');
+	const allowUnauthorizedCerts = credentials.allowUnauthorizedCerts as boolean;
+	const baseUrl = credentials.rtInstanceUrl as string;
+
+	const customFieldsUrl = `${baseUrl}/REST/2.0/customfields`;
+
+	if (debug) {
+		logger.info(`[RT Debug] Bulk fetching ${customFieldIds.length} custom field(s): ${customFieldIds.join(', ')}`);
+	}
+
+	try {
+		const allItems: IDataObject[] = [];
+		let page = 1;
+		let hasMore = true;
+
+		// Build filter body for id IN [...]
+		const filterBody = [
+			{
+				field: 'id',
+				operator: 'IN',
+				value: customFieldIds.map(id => parseInt(id, 10)),
+			},
+		];
+
+		while (hasMore) {
+			const response = (await this.helpers.httpRequestWithAuthentication.call(
+				this,
+				'requestTrackerApi',
+				{
+					method: 'POST',
+					url: customFieldsUrl,
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					qs: {
+						fields: 'id,Name',
+						page,
+						per_page: 100,
+					},
+					body: filterBody,
+					json: true,
+					skipSslCertificateValidation: allowUnauthorizedCerts,
+				},
+			)) as IDataObject;
+
+			const items = (response.items as IDataObject[]) || [];
+			allItems.push(...items);
+
+			if (debug) {
+				logger.info(`[RT Debug] Custom fields page ${page}: Found ${items.length} item(s)`);
+			}
+
+			// Check if there are more pages
+			const perPage = (response.per_page as number) || 100;
+			const count = items.length;
+
+			hasMore = count === perPage;
+			page++;
+		}
+
+		// Build id→name map
+		const idToNameMap = new Map<string, string>();
+		for (const cf of allItems) {
+			if (debug) {
+				logger.info(`[RT Debug] Custom field item: ${JSON.stringify(cf)}`);
+			}
+			const id = String(cf.id);
+			const name = cf.Name as string;
+			if (id && name) {
+				idToNameMap.set(id, name);
+				if (debug) {
+					logger.info(`[RT Debug] Mapped CF ${id} -> "${name}"`);
+				}
+			}
+		}
+
+		if (debug) {
+			logger.info(`[RT Debug] Built custom field map with ${idToNameMap.size} entries`);
+		}
+
+		return idToNameMap;
+	} catch (error) {
+		if (debug) {
+			logger.error(`[RT Debug] Error fetching custom fields: ${(error as Error).message}`);
+		}
+		// Return empty map on error - gracefully degrade by keeping numeric IDs
+		return new Map();
+	}
+}
+
+/**
  * Process transactions (history items) to include their attachments
  * This is designed to work with n8n's declarative routing postReceive hook
  * Can be used for both single transaction get and getMany operations
@@ -1259,6 +1364,29 @@ export async function processTransactions(
 				includeContent: includeContent || includeAttachments, // Fetch content when EITHER flag is true (avoids extra /attachment/{id} calls)
 			});
 		}
+	}
+
+	// Collect unique custom field IDs from CustomField type transactions
+	// Field contains just the numeric ID (e.g., "12345") for CustomField transactions
+	const customFieldIds = new Set<string>();
+	for (const item of items) {
+		const transaction = item.json;
+		if (transaction.Type === 'CustomField' && transaction.Field !== undefined) {
+			const fieldValue = String(transaction.Field);
+			// Only collect numeric IDs (skip if already a name)
+			if (/^\d+$/.test(fieldValue)) {
+				customFieldIds.add(fieldValue);
+			}
+		}
+	}
+
+	// Fetch custom field names in bulk if there are any to resolve
+	let customFieldMap = new Map<string, string>();
+	if (customFieldIds.size > 0) {
+		if (debug) {
+			logger.info(`[RT Debug] Resolving ${customFieldIds.size} custom field name(s)`);
+		}
+		customFieldMap = await fetchCustomFieldsBulk.call(this, Array.from(customFieldIds));
 	}
 
 	// Process transactions with controlled concurrency
@@ -1450,7 +1578,26 @@ export async function processTransactions(
 
 				// Add field change information if present (for Set, CustomField, etc.)
 				if (transaction.Field !== undefined) {
-					processedItem.Field = transaction.Field;
+					const fieldValue = String(transaction.Field);
+					// For CustomField type with numeric Field, resolve to name and preserve ID
+					if (transaction.Type === 'CustomField' && /^\d+$/.test(fieldValue)) {
+						const resolvedName = customFieldMap.get(fieldValue);
+						if (debug) {
+							logger.info(`[RT Debug] CF lookup: fieldValue="${fieldValue}", mapSize=${customFieldMap.size}, resolved="${resolvedName}"`);
+						}
+						if (resolvedName) {
+							processedItem.Field = resolvedName;
+							processedItem.FieldId = fieldValue;
+						} else {
+							// Keep original ID if resolution failed (deleted CF, API error)
+							processedItem.Field = transaction.Field;
+							if (debug) {
+								logger.info(`[RT Debug] Could not resolve custom field ID ${fieldValue} to name`);
+							}
+						}
+					} else {
+						processedItem.Field = transaction.Field;
+					}
 				}
 				if (transaction.OldValue !== undefined) {
 					processedItem.OldValue = transaction.OldValue;
@@ -1602,6 +1749,10 @@ export async function processTransactions(
 							'_hyperlinks',
 							'Content',
 							'Attachments',
+							'Field',      // Already handled with CF name resolution
+							'OldValue',   // Already handled above
+							'NewValue',   // Already handled above
+							'Data',       // Already handled above
 						].includes(key)
 					) {
 						continue;
@@ -1626,6 +1777,9 @@ export async function processTransactions(
 					// Add field change info if present (for Set, CustomField, etc.)
 					if (processedItem.Field !== undefined) {
 						simplifiedItem.Field = processedItem.Field;
+					}
+					if (processedItem.FieldId !== undefined) {
+						simplifiedItem.FieldId = processedItem.FieldId;
 					}
 					if (processedItem.OldValue !== undefined) {
 						simplifiedItem.OldValue = processedItem.OldValue;
