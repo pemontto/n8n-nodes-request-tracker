@@ -672,17 +672,133 @@ export function getTicketFields(): string {
  * Get the expanded field parameters for linked objects (users, queues, etc.)
  * This ensures that related objects return useful information instead of just IDs
  * Based on python-rt library's field expansion patterns
+ *
+ * @param resource - Optional resource type to get resource-specific expansions
  */
-export function getExpandedFieldParams(): IDataObject {
+export function getExpandedFieldParams(resource?: string): IDataObject {
+	// Ticket-specific expansions (default)
+	if (!resource || resource === 'ticket') {
+		return {
+			'fields[Queue]': 'id,Name,Description',
+			'fields[Creator]': 'id,Name,RealName,EmailAddress',
+			'fields[LastUpdatedBy]': 'id,Name,RealName,EmailAddress',
+			'fields[Owner]': 'id,Name,RealName,EmailAddress',
+			'fields[Requestors]': 'id,Name,RealName,EmailAddress',
+			'fields[Cc]': 'id,Name,RealName,EmailAddress',
+			'fields[AdminCc]': 'id,Name,RealName,EmailAddress',
+		};
+	}
+	// User/Queue have Creator, LastUpdatedBy
+	if (resource === 'user' || resource === 'queue') {
+		return {
+			'fields[Creator]': 'id,Name,RealName,EmailAddress',
+			'fields[LastUpdatedBy]': 'id,Name,RealName,EmailAddress',
+		};
+	}
+	// Transaction/Attachment have Creator only
 	return {
-		'fields[Queue]': 'id,Name,Description',
 		'fields[Creator]': 'id,Name,RealName,EmailAddress',
-		'fields[LastUpdatedBy]': 'id,Name,RealName,EmailAddress',
-		'fields[Owner]': 'id,Name,RealName,EmailAddress',
-		'fields[Requestors]': 'id,Name,RealName,EmailAddress',
-		'fields[Cc]': 'id,Name,RealName,EmailAddress',
-		'fields[AdminCc]': 'id,Name,RealName,EmailAddress',
 	};
+}
+
+/**
+ * Get the default fields for a resource type
+ * Used when outputFields is not specified
+ */
+export function getDefaultFields(resource: string): string {
+	switch (resource) {
+		case 'ticket':
+			return getTicketFields();
+		case 'transaction':
+			return 'Type,Creator,Created,Description,Field,OldValue,NewValue,Data,Object,_hyperlinks';
+		case 'attachment':
+			return 'Subject,Filename,ContentType,ContentLength,Created,Creator,TransactionId,MessageId,Headers';
+		case 'user':
+			return 'id,Name,CustomFields,EmailAddress,RealName,NickName,Organization,HomePhone,WorkPhone,MobilePhone,PagerPhone,Address1,Address2,City,State,Zip,Country,Gecos,Lang,Timezone,Comments,Signature,Creator,Created,LastUpdatedBy,LastUpdated,Disabled,Privileged';
+		case 'queue':
+			return 'id,Name,Description,Lifecycle,SubjectTag,CorrespondAddress,CommentAddress,Disabled,CustomFields,Creator,Created,LastUpdatedBy,LastUpdated';
+		default:
+			return '';
+	}
+}
+
+/**
+ * PreSend hook to build fields query parameters based on optional outputFields
+ * When outputFields is specified, uses only those fields (no automatic expansion)
+ * When outputFields is not specified, uses default fields with automatic expansion
+ */
+export async function buildFieldsQueryParams(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	// Try to get outputFields from various parameter locations
+	let outputFields: string | undefined;
+	try {
+		// First try direct parameter (for single-item operations like Get)
+		outputFields = this.getNodeParameter('outputFields', '') as string;
+	} catch {
+		// Ignore - parameter doesn't exist at this level
+	}
+
+	if (!outputFields) {
+		try {
+			// Try additionalOptions (for multi-item operations like Search, Get Many)
+			const additionalOptions = this.getNodeParameter('additionalOptions', {}) as IDataObject;
+			outputFields = additionalOptions.outputFields as string | undefined;
+		} catch {
+			// Ignore - parameter doesn't exist
+		}
+	}
+
+	const resource = this.getNodeParameter('resource', 'ticket') as string;
+	let operation: string | undefined;
+	try {
+		operation = this.getNodeParameter('operation', '') as string;
+	} catch {
+		// Ignore
+	}
+
+	// Determine effective resource type for field defaults
+	// Ticket > Get History actually returns transactions, so use transaction fields
+	const effectiveResource = (resource === 'ticket' && operation === 'getHistory') ? 'transaction' : resource;
+
+	if (!requestOptions.qs) {
+		requestOptions.qs = {};
+	}
+
+	if (outputFields && outputFields.trim()) {
+		// User specified fields - use exactly what they want, no automatic expansion
+		requestOptions.qs.fields = outputFields.trim();
+	} else {
+		// Use defaults with automatic expansion
+		let fields = getDefaultFields(effectiveResource);
+
+		// Special handling for Attachment resource
+		if (resource === 'attachment') {
+			// Attachment > Get always includes Content
+			if (operation === 'get') {
+				fields = 'Subject,Filename,ContentType,ContentLength,Created,Creator,TransactionId,MessageId,Content,Headers';
+			} else if (operation === 'getMany') {
+				// Attachment > Get Many conditionally includes Content based on downloadContent
+				let downloadContent = false;
+				try {
+					const additionalOptions = this.getNodeParameter('additionalOptions', {}) as IDataObject;
+					downloadContent = additionalOptions.downloadContent === true;
+				} catch {
+					// Ignore
+				}
+				fields = 'Subject,Filename,ContentType,ContentLength,Created,Creator,TransactionId,MessageId,Headers';
+				if (downloadContent) {
+					fields += ',Content';
+				}
+			}
+		}
+
+		requestOptions.qs.fields = fields;
+		Object.assign(requestOptions.qs, getExpandedFieldParams(effectiveResource));
+	}
+
+	return requestOptions;
 }
 
 /**

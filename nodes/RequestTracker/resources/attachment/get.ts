@@ -27,4 +27,13 @@ export const attachmentGetDescription: INodeProperties[] = [
 		// eslint-disable-next-line n8n-nodes-base/node-param-description-miscased-id
 		description: 'Whether to return only essential fields (id, Filename, ContentType, ContentLength, Creator) and simplify Creator to just Name. When disabled, returns all available fields including Headers, Subject, etc.',
 	},
+	{
+		displayName: 'Output Fields',
+		name: 'outputFields',
+		type: 'string',
+		default: '',
+		placeholder: 'Leave empty for all standard fields',
+		description: 'Comma-separated list of fields to return (e.g., "Filename,ContentType,Content"). Leave empty for standard attachment fields with automatic expansion of linked objects.',
+		displayOptions: { show: showOnlyForAttachmentGet },
+	},
 ];

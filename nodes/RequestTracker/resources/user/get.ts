@@ -25,4 +25,14 @@ export const userGetDescription: INodeProperties[] = [
 			'Whether to simplify the response by flattening custom fields',
 		displayOptions: { show: showOnlyForUserGet },
 	},
+	{
+		displayName: 'Output Fields',
+		name: 'outputFields',
+		type: 'string',
+		default: '',
+		placeholder: 'Leave empty for all standard fields',
+		// eslint-disable-next-line n8n-nodes-base/node-param-description-miscased-id
+		description: 'Comma-separated list of fields to return (e.g., "id,Name,EmailAddress,RealName"). Leave empty for standard user fields with automatic expansion of linked objects.',
+		displayOptions: { show: showOnlyForUserGet },
+	},
 ];

@@ -178,6 +178,14 @@ export const attachmentGetManyDescription: INodeProperties[] = [
 				default: 'Created',
 				description: 'Field to sort attachments by (default: Created)',
 			},
+			{
+				displayName: 'Output Fields',
+				name: 'outputFields',
+				type: 'string',
+				default: '',
+				placeholder: 'Leave empty for all standard fields',
+				description: 'Comma-separated list of fields to return (e.g., "Filename,ContentType,Content"). Leave empty for standard attachment fields with automatic expansion of linked objects.',
+			},
 		],
 	},
 ];

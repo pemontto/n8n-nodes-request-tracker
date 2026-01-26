@@ -144,7 +144,13 @@ Contains shared transformation and utility functions used across operations:
 
 2. **API Helpers**:
    - `getTicketFields()`: Returns comma-separated list of standard ticket fields
-   - `getExpandedFieldParams()`: Returns query parameters for expanding linked objects (users, queues)
+   - `getDefaultFields(resource)`: Returns default fields for a given resource type (ticket, transaction, attachment, user, queue)
+   - `getExpandedFieldParams(resource?)`: Returns query parameters for expanding linked objects (users, queues, etc.). Resource-specific when provided.
+   - `buildFieldsQueryParams`: PreSend hook that dynamically sets `fields` and `fields[*]` query params based on optional `outputFields` parameter
+     - If `outputFields` is specified, uses only those fields (no automatic expansion of linked objects)
+     - If `outputFields` is empty, uses default fields with automatic expansion of linked objects
+     - Handles special cases like Attachment operations (Content field) and Ticket > Get History (returns transaction fields)
+     - **Limitation**: When `outputFields` is specified, linked objects (Creator, Queue, Owner, etc.) return only IDs, not expanded data. To get expanded linked object data (e.g., Creator's email), leave `outputFields` empty.
    - `handleRtApiError`: Error handler for RT API responses (handles 200 OK with error body)
 
 3. **Debug Functions**:

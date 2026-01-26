@@ -152,6 +152,15 @@ export const ticketSearchDescription: INodeProperties[] = [
 				],
 				description: 'Sort order direction',
 			},
+			{
+				displayName: 'Output Fields',
+				name: 'outputFields',
+				type: 'string',
+				default: '',
+				placeholder: 'Leave empty for all standard fields',
+				// eslint-disable-next-line n8n-nodes-base/node-param-description-miscased-id
+				description: 'Comma-separated list of fields to return (e.g., "id,Subject,Status,Queue"). Leave empty for standard fields with automatic expansion of linked objects.',
+			},
 		],
 	},
 ];

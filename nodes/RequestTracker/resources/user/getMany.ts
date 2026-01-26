@@ -94,6 +94,15 @@ export const userGetManyDescription: INodeProperties[] = [
 				default: false,
 				description: 'Whether to include all users instead of privileged users only',
 			},
+			{
+				displayName: 'Output Fields',
+				name: 'outputFields',
+				type: 'string',
+				default: '',
+				placeholder: 'Leave empty for all standard fields',
+				// eslint-disable-next-line n8n-nodes-base/node-param-description-miscased-id
+				description: 'Comma-separated list of fields to return (e.g., "id,Name,EmailAddress,RealName"). Leave empty for standard user fields with automatic expansion of linked objects.',
+			},
 		],
 	},
 	{

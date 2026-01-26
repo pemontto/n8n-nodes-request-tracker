@@ -1,7 +1,7 @@
 import type { INodeProperties } from 'n8n-workflow';
 import { transactionGetDescription } from './get';
 import { transactionGetManyDescription } from './getMany';
-import { handleRtApiError, processTransactions } from '../../GenericFunctions';
+import { handleRtApiError, processTransactions, buildFieldsQueryParams } from '../../GenericFunctions';
 
 const showOnlyForTransaction = {
 	resource: ['transaction'],
@@ -32,10 +32,9 @@ export const transactionDescription: INodeProperties[] = [
 					request: {
 						method: 'GET',
 						url: '=/transaction/{{$parameter.transactionId}}',
-						qs: {
-							fields: 'Type,Creator,Created,Description,Field,OldValue,NewValue,Data,Object,_hyperlinks',
-							'fields[Creator]': 'id,Name,RealName,EmailAddress',
-						},
+					},
+					send: {
+						preSend: [buildFieldsQueryParams],
 					},
 					output: {
 						postReceive: [handleRtApiError, processTransactions],
@@ -56,8 +55,6 @@ export const transactionDescription: INodeProperties[] = [
 							'Content-Type': 'application/x-www-form-urlencoded',
 						},
 						qs: {
-							fields: 'Type,Creator,Created,Description,Field,OldValue,NewValue,Data,ObjectType,ObjectId,_hyperlinks',
-							'fields[Creator]': 'id,Name,RealName,EmailAddress',
 							per_page: '={{$parameter.returnAll ? 100 : Math.min($parameter.limit || 100, 100)}}',
 							order: '={{$parameter.additionalOptions?.order || "DESC"}}',
 							orderby: '={{$parameter.additionalOptions?.orderby || "Created"}}',
@@ -80,6 +77,7 @@ export const transactionDescription: INodeProperties[] = [
 						],
 					},
 					send: {
+						preSend: [buildFieldsQueryParams],
 						paginate: '={{ $parameter.returnAll || $parameter.limit > 100 }}',
 					},
 					operations: {

@@ -6,14 +6,13 @@ import { ticketCommentDescription, ticketCorrespondDescription } from './comment
 import { ticketSearchDescription } from './search';
 import { ticketGetHistoryDescription } from './getHistory';
 import {
-	getTicketFields,
-	getExpandedFieldParams,
 	transformTicketData,
 	handleRtApiError,
 	processTicketHistory,
 	mergeCustomFieldsPreSend,
 	transformOperationResponse,
 	buildRequestBodyPreSend,
+	buildFieldsQueryParams,
 	debugPreSendRequest,
 } from '../../GenericFunctions';
 
@@ -66,10 +65,9 @@ export const ticketDescription: INodeProperties[] = [
 					request: {
 						method: 'GET',
 						url: '=/ticket/{{$parameter.ticketId}}',
-						qs: {
-							fields: getTicketFields(),
-							...getExpandedFieldParams(),
-						},
+					},
+					send: {
+						preSend: [buildFieldsQueryParams],
 					},
 					output: {
 						postReceive: [
@@ -160,8 +158,6 @@ export const ticketDescription: INodeProperties[] = [
 							per_page: '={{ Math.min($parameter.limit || 100, 100) }}',
 							orderby: '={{$parameter.additionalOptions?.orderby || "id"}}',
 							order: '={{$parameter.additionalOptions?.order || "ASC"}}',
-							fields: getTicketFields(),
-							...getExpandedFieldParams(),
 							find_disabled_rows: '={{$parameter.additionalOptions?.find_disabled_rows ? "1" : ""}}',
 						},
 						body: {
@@ -182,6 +178,7 @@ export const ticketDescription: INodeProperties[] = [
 						],
 					},
 					send: {
+						preSend: [buildFieldsQueryParams],
 						paginate: '={{ $parameter.returnAll || $parameter.limit > 100 }}',
 					},
 					operations: {
@@ -208,8 +205,6 @@ export const ticketDescription: INodeProperties[] = [
 						method: 'POST',
 						url: '=/ticket/{{$parameter.ticketId}}/history',
 						qs: {
-							fields: 'Type,Creator,Created,Description,Field,OldValue,NewValue,Data,Object,_hyperlinks',
-							'fields[Creator]': 'id,Name,RealName,EmailAddress',
 							per_page: '={{$parameter.returnAll ? 100 : Math.min($parameter.limit || 100, 100)}}',
 							order: '={{$parameter.additionalOptions?.order || "DESC"}}',
 							orderby: '={{$parameter.additionalOptions?.orderby || "Created"}}',
@@ -230,6 +225,7 @@ export const ticketDescription: INodeProperties[] = [
 						],
 					},
 					send: {
+						preSend: [buildFieldsQueryParams],
 						paginate: '={{ $parameter.returnAll || $parameter.limit > 100 }}',
 					},
 					operations: {

@@ -27,6 +27,15 @@ export const transactionGetDescription: INodeProperties[] = [
 		description: 'Whether to return only essential fields (Type, Created, Field, OldValue, NewValue, Description, Content, Attachments) and simplify Creator to just Name. When disabled, returns all available fields including TransactionId, MessageId, Headers, etc.',
 	},
 	{
+		displayName: 'Output Fields',
+		name: 'outputFields',
+		type: 'string',
+		default: '',
+		placeholder: 'Leave empty for all standard fields',
+		description: 'Comma-separated list of fields to return (e.g., "Type,Creator,Created,Description"). Leave empty for standard transaction fields with automatic expansion of linked objects.',
+		displayOptions: { show: showOnlyForTransactionGet },
+	},
+	{
 		displayName: 'Additional Options',
 		name: 'additionalOptions',
 		type: 'collection',

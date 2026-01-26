@@ -60,6 +60,7 @@ export const transactionGetManyDescription: INodeProperties[] = [
 		placeholder: 'Add Option',
 		default: {},
 		displayOptions: { show: showOnlyForTransactionGetMany },
+		// eslint-disable-next-line n8n-nodes-base/node-param-collection-type-unsorted-items
 		options: [
 			{
 				displayName: 'Include Content',
@@ -98,6 +99,14 @@ export const transactionGetManyDescription: INodeProperties[] = [
 				type: 'string',
 				default: 'Created',
 				description: 'Field to sort transactions by (default: Created)',
+			},
+			{
+				displayName: 'Output Fields',
+				name: 'outputFields',
+				type: 'string',
+				default: '',
+				placeholder: 'Leave empty for all standard fields',
+				description: 'Comma-separated list of fields to return (e.g., "Type,Creator,Created,Description"). Leave empty for standard transaction fields with automatic expansion of linked objects.',
 			},
 		],
 	},
