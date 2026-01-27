@@ -98,9 +98,10 @@ export const queueGetManyDescription: INodeProperties[] = [
 				name: 'outputFields',
 				type: 'string',
 				default: '',
-				placeholder: 'Leave empty for all standard fields',
+				// eslint-disable-next-line n8n-nodes-base/node-param-placeholder-miscased-id
+				placeholder: 'e.g., id,Name,Description (empty = RT minimum)',
 				// eslint-disable-next-line n8n-nodes-base/node-param-description-miscased-id
-				description: 'Comma-separated list of fields to return (e.g., "id,Name,Description,Lifecycle"). Leave empty for standard queue fields with automatic expansion of linked objects.',
+				description: 'Comma-separated list of fields to return. Empty = RT returns minimum fields (id, type, _url). When specified, linked objects return IDs only.',
 			},
 		],
 	},

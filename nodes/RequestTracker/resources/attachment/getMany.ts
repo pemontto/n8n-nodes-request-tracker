@@ -183,8 +183,9 @@ export const attachmentGetManyDescription: INodeProperties[] = [
 				name: 'outputFields',
 				type: 'string',
 				default: '',
-				placeholder: 'Leave empty for all standard fields',
-				description: 'Comma-separated list of fields to return (e.g., "Filename,ContentType,Content"). Leave empty for standard attachment fields with automatic expansion of linked objects.',
+				placeholder: 'e.g., Filename,ContentType,Content (empty = RT minimum)',
+				// eslint-disable-next-line n8n-nodes-base/node-param-description-miscased-id
+				description: 'Comma-separated list of fields to return. Empty = RT returns minimum fields (id, type, _url). When specified, linked objects return IDs only.',
 			},
 		],
 	},

@@ -31,8 +31,9 @@ export const transactionGetDescription: INodeProperties[] = [
 		name: 'outputFields',
 		type: 'string',
 		default: '',
-		placeholder: 'Leave empty for all standard fields',
-		description: 'Comma-separated list of fields to return (e.g., "Type,Creator,Created,Description"). Leave empty for standard transaction fields with automatic expansion of linked objects.',
+		placeholder: 'e.g., Type,Creator,Created (empty = RT minimum)',
+		// eslint-disable-next-line n8n-nodes-base/node-param-description-miscased-id
+		description: 'Comma-separated list of fields to return. Empty = RT returns minimum fields (id, type, _url). When specified, linked objects return IDs only.',
 		displayOptions: { show: showOnlyForTransactionGet },
 	},
 	{

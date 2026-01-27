@@ -29,9 +29,10 @@ export const ticketGetDescription: INodeProperties[] = [
 		name: 'outputFields',
 		type: 'string',
 		default: '',
-		placeholder: 'Leave empty for all standard fields',
+		// eslint-disable-next-line n8n-nodes-base/node-param-placeholder-miscased-id
+		placeholder: 'e.g., id,Subject,Status (empty = RT minimum)',
 		// eslint-disable-next-line n8n-nodes-base/node-param-description-miscased-id
-		description: 'Comma-separated list of fields to return (e.g., "id,Subject,Status,CustomFields"). When specified, linked objects (Creator, Queue, etc.) return IDs only. Leave empty for full data with expanded linked objects.',
+		description: 'Comma-separated list of fields to return. Empty = RT returns minimum fields (id, type, _url). When specified, linked objects (Creator, Queue, etc.) return IDs only.',
 		displayOptions: { show: showOnlyForTicketGet },
 	},
 ];

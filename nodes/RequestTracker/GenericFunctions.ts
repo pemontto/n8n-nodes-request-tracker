@@ -724,15 +724,18 @@ export function getDefaultFields(resource: string): string {
 
 /**
  * PreSend hook to build fields query parameters based on optional outputFields
- * When outputFields is specified, uses only those fields (no automatic expansion)
- * When outputFields is not specified, uses default fields with automatic expansion
+ * - outputFields is non-empty: uses only those fields (no automatic expansion)
+ * - outputFields is empty string: don't send fields param, RT returns minimum fields
+ * - outputFields not set: uses default fields with automatic expansion
  */
 export async function buildFieldsQueryParams(
 	this: IExecuteSingleFunctions,
 	requestOptions: IHttpRequestOptions,
 ): Promise<IHttpRequestOptions> {
-	// Try to get outputFields from various parameter locations
-	let outputFields: string | undefined;
+	// Sentinel to distinguish "parameter not found" from "parameter is empty string"
+	const NOT_SET = Symbol('not-set');
+	let outputFields: string | typeof NOT_SET = NOT_SET;
+
 	try {
 		// First try direct parameter (for single-item operations like Get)
 		outputFields = this.getNodeParameter('outputFields', '') as string;
@@ -740,11 +743,13 @@ export async function buildFieldsQueryParams(
 		// Ignore - parameter doesn't exist at this level
 	}
 
-	if (!outputFields) {
+	if (outputFields === NOT_SET) {
 		try {
 			// Try additionalOptions (for multi-item operations like Search, Get Many)
 			const additionalOptions = this.getNodeParameter('additionalOptions', {}) as IDataObject;
-			outputFields = additionalOptions.outputFields as string | undefined;
+			if (additionalOptions.outputFields !== undefined) {
+				outputFields = additionalOptions.outputFields as string;
+			}
 		} catch {
 			// Ignore - parameter doesn't exist
 		}
@@ -766,11 +771,15 @@ export async function buildFieldsQueryParams(
 		requestOptions.qs = {};
 	}
 
-	if (outputFields && outputFields.trim()) {
-		// User specified fields - use exactly what they want, no automatic expansion
-		requestOptions.qs.fields = outputFields.trim();
+	if (outputFields !== NOT_SET) {
+		// Parameter was found - use user's value
+		if (outputFields && outputFields.trim()) {
+			// Non-empty: use exactly what they specified, no automatic expansion
+			requestOptions.qs.fields = outputFields.trim();
+		}
+		// Empty string: don't set fields param at all, RT returns minimum fields
 	} else {
-		// Use defaults with automatic expansion
+		// Parameter not found - use defaults with automatic expansion
 		let fields = getDefaultFields(effectiveResource);
 
 		// Special handling for Attachment resource
