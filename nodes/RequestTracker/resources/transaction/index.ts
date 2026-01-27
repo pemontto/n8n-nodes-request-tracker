@@ -60,7 +60,7 @@ export const transactionDescription: INodeProperties[] = [
 							orderby: '={{$parameter.additionalOptions?.orderby || "Created"}}',
 						},
 						body: {
-							query: '={{$parameter.query}}',
+							query: '={{ (() => { const q = $parameter.query?.trim() || ""; const types = $parameter.transactionTypes || []; const typeFilter = types.length ? types.map(t => "Type = \'" + t + "\'").join(" OR ") : ""; if (q && typeFilter) return "(" + q + ") AND (" + typeFilter + ")"; if (q) return q; if (typeFilter) return typeFilter; return "id > 0"; })() }}',
 						},
 					},
 					output: {

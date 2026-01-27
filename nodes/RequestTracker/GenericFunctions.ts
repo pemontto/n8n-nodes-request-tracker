@@ -16,6 +16,40 @@ import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 const USER_FIELDS = ['Creator', 'LastUpdatedBy', 'Owner'] as const;
 const USER_ARRAY_FIELDS = ['Requestors', 'Cc', 'AdminCc'] as const;
 const TRANSACTION_CONTENT_TYPES = ['Comment', 'Create', 'Correspond', 'EmailRecord', 'CommentEmailRecord'] as const;
+
+/**
+ * Transaction type options for multiOptions fields
+ * Used by Ticket > Get History and Transaction > Get Many
+ */
+export const TRANSACTION_TYPE_OPTIONS = [
+	// Common standard types (from RT's @TxnTypeTicketList)
+	{ name: 'Create', value: 'Create' },
+	{ name: 'Correspond', value: 'Correspond' },
+	{ name: 'Comment', value: 'Comment' },
+	{ name: 'Comment Email Record', value: 'CommentEmailRecord' },
+	{ name: 'Email Record', value: 'EmailRecord' },
+	{ name: 'Status', value: 'Status' },
+	{ name: 'Set', value: 'Set' },
+	{ name: 'Custom Field', value: 'CustomField' },
+	{ name: 'Add Link', value: 'AddLink' },
+	{ name: 'Delete Link', value: 'DeleteLink' },
+	{ name: 'Add Watcher', value: 'AddWatcher' },
+	{ name: 'Delete Watcher', value: 'DelWatcher' },
+	{ name: 'Set Watcher', value: 'SetWatcher' },
+	{ name: 'Forward Ticket', value: 'Forward Ticket' },
+	{ name: 'Forward Transaction', value: 'Forward Transaction' },
+	// Additional less common types
+	{ name: 'Take', value: 'Take' },
+	{ name: 'Untake', value: 'Untake' },
+	{ name: 'Steal', value: 'Steal' },
+	{ name: 'Give', value: 'Give' },
+	{ name: 'Subject', value: 'Subject' },
+	{ name: 'Told', value: 'Told' },
+	{ name: 'Set Time Worked', value: 'Set-TimeWorked' },
+	{ name: 'Add Reminder', value: 'AddReminder' },
+	{ name: 'Open Reminder', value: 'OpenReminder' },
+	{ name: 'Resolve Reminder', value: 'ResolveReminder' },
+];
 const TICKET_PREFERRED_ORDER = [
 	'id',
 	'Queue',
@@ -710,7 +744,7 @@ export function getDefaultFields(resource: string): string {
 		case 'ticket':
 			return getTicketFields();
 		case 'transaction':
-			return 'Type,Creator,Created,Description,Field,OldValue,NewValue,Data,Object,_hyperlinks';
+			return 'Type,Creator,Created,Description,Field,OldValue,NewValue,Data,ObjectType,ObjectId,_hyperlinks';
 		case 'attachment':
 			return 'Subject,Filename,ContentType,ContentLength,Created,Creator,TransactionId,MessageId,Headers';
 		case 'user':
@@ -778,8 +812,33 @@ export async function buildFieldsQueryParams(
 	if (outputFields !== NOT_SET) {
 		// Parameter was found - use user's value
 		if (outputFields && outputFields.trim()) {
-			// Non-empty: use exactly what they specified, no automatic expansion
-			requestOptions.qs.fields = outputFields.trim();
+			// Non-empty: use user's fields, but add dependencies required for post-processing
+			let fields = outputFields.trim();
+
+			// Transaction field dependencies for post-processing
+			if (effectiveResource === 'transaction') {
+				const fieldList = fields.split(',').map(f => f.trim().toLowerCase());
+				const fieldsToAdd: string[] = [];
+
+				// Field resolution requires Type to determine if it's a CustomField
+				if (fieldList.includes('field') && !fieldList.includes('type')) {
+					fieldsToAdd.push('Type');
+				}
+
+				// TicketId derivation requires ObjectType and ObjectId
+				if (!fieldList.includes('objecttype')) {
+					fieldsToAdd.push('ObjectType');
+				}
+				if (!fieldList.includes('objectid')) {
+					fieldsToAdd.push('ObjectId');
+				}
+
+				if (fieldsToAdd.length > 0) {
+					fields = fields + ',' + fieldsToAdd.join(',');
+				}
+			}
+
+			requestOptions.qs.fields = fields;
 		}
 		// Empty string: don't set fields param at all, RT returns minimum fields
 	} else {
@@ -1882,6 +1941,9 @@ export async function processTransactions(
 							'OldValue',   // Already handled above
 							'NewValue',   // Already handled above
 							'Data',       // Already handled above
+							'Object',     // Already extracted TicketId from this
+							'ObjectType', // Already used for TicketId extraction
+							'ObjectId',   // Already used for TicketId extraction
 						].includes(key)
 					) {
 						continue;

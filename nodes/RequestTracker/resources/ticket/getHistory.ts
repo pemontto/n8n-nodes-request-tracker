@@ -1,4 +1,5 @@
 import type { INodeProperties } from 'n8n-workflow';
+import { TRANSACTION_TYPE_OPTIONS } from '../../GenericFunctions';
 
 export const ticketGetHistoryDescription: INodeProperties[] = [
 	{
@@ -22,35 +23,7 @@ export const ticketGetHistoryDescription: INodeProperties[] = [
 		type: 'multiOptions',
 		default: [],
 		// eslint-disable-next-line n8n-nodes-base/node-param-multi-options-type-unsorted-items
-		options: [
-			// Common standard types (from RT's @TxnTypeTicketList)
-			{ name: 'Create', value: 'Create' },
-			{ name: 'Correspond', value: 'Correspond' },
-			{ name: 'Comment', value: 'Comment' },
-			{ name: 'Comment Email Record', value: 'CommentEmailRecord' },
-			{ name: 'Email Record', value: 'EmailRecord' },
-			{ name: 'Status', value: 'Status' },
-			{ name: 'Set', value: 'Set' },
-			{ name: 'Custom Field', value: 'CustomField' },
-			{ name: 'Add Link', value: 'AddLink' },
-			{ name: 'Delete Link', value: 'DeleteLink' },
-			{ name: 'Add Watcher', value: 'AddWatcher' },
-			{ name: 'Delete Watcher', value: 'DelWatcher' },
-			{ name: 'Set Watcher', value: 'SetWatcher' },
-			{ name: 'Forward Ticket', value: 'Forward Ticket' },
-			{ name: 'Forward Transaction', value: 'Forward Transaction' },
-			// Additional less common types
-			{ name: 'Take', value: 'Take' },
-			{ name: 'Untake', value: 'Untake' },
-			{ name: 'Steal', value: 'Steal' },
-			{ name: 'Give', value: 'Give' },
-			{ name: 'Subject', value: 'Subject' },
-			{ name: 'Told', value: 'Told' },
-			{ name: 'Set Time Worked', value: 'Set-TimeWorked' },
-			{ name: 'Add Reminder', value: 'AddReminder' },
-			{ name: 'Open Reminder', value: 'OpenReminder' },
-			{ name: 'Resolve Reminder', value: 'ResolveReminder' },
-		],
+		options: TRANSACTION_TYPE_OPTIONS,
 		displayOptions: {
 			show: {
 				resource: ['ticket'],

@@ -1,4 +1,5 @@
 import type { INodeProperties } from 'n8n-workflow';
+import { TRANSACTION_TYPE_OPTIONS } from '../../GenericFunctions';
 
 const showOnlyForTransactionGetMany = {
 	resource: ['transaction'],
@@ -14,10 +15,19 @@ export const transactionGetManyDescription: INodeProperties[] = [
 			rows: 4,
 		},
 		default: '',
-		required: true,
-		placeholder: "Creator='user@example.com' AND Type='Correspond'",
-		description: 'TransactionSQL query to search for transactions. Example: Creator=\'Dave\' AND Type=\'Correspond\'.',
+		placeholder: "Creator='user@example.com' AND ObjectType='RT::Ticket'",
+		description: 'TransactionSQL query to search for transactions. Leave empty to search all transactions (use Filter Transaction Types to narrow results).',
 		displayOptions: { show: showOnlyForTransactionGetMany },
+	},
+	{
+		displayName: 'Filter Transaction Types',
+		name: 'transactionTypes',
+		type: 'multiOptions',
+		default: [],
+		// eslint-disable-next-line n8n-nodes-base/node-param-multi-options-type-unsorted-items
+		options: TRANSACTION_TYPE_OPTIONS,
+		displayOptions: { show: showOnlyForTransactionGetMany },
+		description: 'Which transaction types to include. Leave empty for all types.',
 	},
 	{
 		displayName: 'Return All',
