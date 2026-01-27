@@ -1,7 +1,7 @@
 import type { INodeProperties } from 'n8n-workflow';
 import { attachmentGetDescription } from './get';
 import { attachmentGetManyDescription } from './getMany';
-import { debugPreSendRequest, handleRtApiError, processAttachments } from '../../GenericFunctions';
+import { debugPreSendRequest, handleRtApiError, processAttachments, buildFieldsQueryParams } from '../../GenericFunctions';
 
 const showOnlyForAttachment = {
 	resource: ['attachment'],
@@ -34,10 +34,11 @@ export const attachmentDescription: INodeProperties[] = [
 						url: '/attachments',
 						body: '={{ [{ field: "id", operator: "=", value: $parameter.attachmentId }] }}',
 						qs: {
-							fields: 'Subject,Filename,ContentType,ContentLength,Created,Creator,TransactionId,MessageId,Content,Headers',
-							'fields[Creator]': 'id,Name,RealName,EmailAddress',
 							per_page: '1',
 						},
+					},
+					send: {
+						preSend: [buildFieldsQueryParams],
 					},
 					output: {
 						postReceive: [
@@ -60,8 +61,6 @@ export const attachmentDescription: INodeProperties[] = [
 						url: '={{ $parameter.scope === "transaction" ? "/transaction/" + $parameter.transactionId + "/attachments" : "/ticket/" + $parameter.ticketId + "/attachments" }}',
 						body: '={{ [...($parameter.filterOptions?.filename ? [{ field: "Filename", operator: "LIKE", value: $parameter.filterOptions.filename }] : []), ...($parameter.filterOptions?.filenameExists ? [{ field: "Filename", operator: "!=", value: "", entry_aggregator: "AND" }] : []), ...($parameter.filterOptions?.contentType ? [{ field: "ContentType", operator: "LIKE", value: $parameter.filterOptions.contentType }] : []), ...($parameter.filterOptions?.createdAfter ? [{ field: "Created", operator: ">", value: $parameter.filterOptions.createdAfter, entry_aggregator: "AND" }] : []), ...($parameter.filterOptions?.createdBefore ? [{ field: "Created", operator: "<", value: $parameter.filterOptions.createdBefore, entry_aggregator: "AND" }] : [])] }}',
 						qs: {
-							fields: '={{ "Subject,Filename,ContentType,ContentLength,Created,Creator,TransactionId,MessageId,Headers" + ($parameter.additionalOptions?.downloadContent ? ",Content" : "") }}',
-							'fields[Creator]': 'id,Name,RealName,EmailAddress',
 							per_page: '={{$parameter.returnAll ? 100 : Math.min($parameter.limit || 100, 100)}}',
 							order: '={{$parameter.additionalOptions?.order || "DESC"}}',
 							orderby: '={{$parameter.additionalOptions?.orderby || "Created"}}',
@@ -82,7 +81,7 @@ export const attachmentDescription: INodeProperties[] = [
 					},
 					send: {
 						paginate: '={{ $parameter.returnAll || $parameter.limit > 100 }}',
-						preSend: [debugPreSendRequest]
+						preSend: [buildFieldsQueryParams, debugPreSendRequest]
 					},
 					operations: {
 						pagination: {

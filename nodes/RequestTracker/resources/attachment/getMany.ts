@@ -178,6 +178,15 @@ export const attachmentGetManyDescription: INodeProperties[] = [
 				default: 'Created',
 				description: 'Field to sort attachments by (default: Created)',
 			},
+			{
+				displayName: 'Output Fields',
+				name: 'outputFields',
+				type: 'string',
+				default: '',
+				placeholder: 'e.g., Filename,ContentType,Content (empty = RT minimum)',
+				// eslint-disable-next-line n8n-nodes-base/node-param-description-miscased-id
+				description: 'Comma-separated list of fields to return. Empty = RT returns minimum fields (id, type, _url). When specified, linked objects return IDs only.',
+			},
 		],
 	},
 ];

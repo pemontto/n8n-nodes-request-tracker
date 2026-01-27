@@ -53,7 +53,7 @@ export class RequestTrackerTrigger implements INodeType {
 				},
 				required: true,
 				default: '',
-				description: 'The TicketSQL query to find relevant tickets (e.g., "Queue = \'General\' AND Status = \'open\'"). The time-based filter will be appended automatically.',
+				description: 'The TicketSQL query to find relevant tickets. The time-based filter will be appended automatically. Tip: Include time constraints to avoid slow queries on large datasets (e.g., "Queue = \'General\' AND Status = \'open\' AND Created > \'2024-01-01\'").',
 			},
 			{
 				displayName: 'Trigger On',

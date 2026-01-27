@@ -49,7 +49,6 @@ async function resolveQueueId(
 	}
 
 	// Look up queue by name
-	console.log('[RT ResourceMapper] Looking up queue by name:', queueNameOrId);
 	const requestOptions: IHttpRequestOptions = {
 		method: 'GET',
 		url: `${baseUrl}/REST/2.0/queue/${encodeURIComponent(queueNameOrId)}`,
@@ -65,7 +64,6 @@ async function resolveQueueId(
 	)) as { id?: string | number };
 
 	if (response.id) {
-		console.log('[RT ResourceMapper] Resolved queue', queueNameOrId, 'to ID:', response.id);
 		return String(response.id);
 	}
 
@@ -81,7 +79,6 @@ async function getQueueIdFromTicket(
 	baseUrl: string,
 	skipSslCertificateValidation: boolean,
 ): Promise<string | null> {
-	console.log('[RT ResourceMapper] Fetching queue from ticket:', ticketId);
 	const ticketRequest: IHttpRequestOptions = {
 		method: 'GET',
 		url: `${baseUrl}/REST/2.0/ticket/${ticketId}`,
@@ -115,8 +112,6 @@ async function fetchGlobalCustomFields(
 	baseUrl: string,
 	skipSslCertificateValidation: boolean,
 ): Promise<CustomFieldDef[]> {
-	console.log('[RT ResourceMapper] Fetching global ticket custom fields');
-
 	// First get the list of global ticket custom fields
 	const listRequest: IHttpRequestOptions = {
 		method: 'POST',
@@ -138,7 +133,6 @@ async function fetchGlobalCustomFields(
 	)) as { items?: Array<{ id: string }> };
 
 	const cfIds = (listResponse.items || []).map((cf) => cf.id);
-	console.log('[RT ResourceMapper] Got', cfIds.length, 'global custom field IDs');
 
 	if (cfIds.length === 0) {
 		return [];
@@ -161,11 +155,10 @@ async function fetchGlobalCustomFields(
 			)) as CustomFieldDef & { Disabled?: string };
 
 			if (cfResponse.Disabled !== '1') {
-				console.log('[RT ResourceMapper] CF:', cfResponse.Name, 'Type:', cfResponse.Type, 'MaxValues:', cfResponse.MaxValues);
 				return cfResponse;
 			}
-		} catch (err) {
-			console.log('[RT ResourceMapper] Error fetching custom field', cfId, err);
+		} catch {
+			// Ignore errors fetching individual custom fields
 		}
 		return null;
 	});
@@ -192,8 +185,6 @@ async function fetchQueueCustomFields(
 		skipSslCertificateValidation,
 	};
 
-	console.log('[RT ResourceMapper] Fetching custom fields from:', listRequest.url);
-
 	const listResponse = (await context.helpers.httpRequestWithAuthentication.call(
 		context,
 		'requestTrackerApi',
@@ -201,7 +192,6 @@ async function fetchQueueCustomFields(
 	)) as { items?: Array<{ id: string }> };
 
 	const cfIds = (listResponse.items || []).map((cf) => cf.id);
-	console.log('[RT ResourceMapper] Got', cfIds.length, 'custom field IDs for queue');
 
 	if (cfIds.length === 0) {
 		return [];
@@ -224,11 +214,10 @@ async function fetchQueueCustomFields(
 			)) as CustomFieldDef & { Disabled?: string };
 
 			if (cfResponse.Disabled !== '1') {
-				console.log('[RT ResourceMapper] CF:', cfResponse.Name, 'Type:', cfResponse.Type, 'MaxValues:', cfResponse.MaxValues);
 				return cfResponse;
 			}
-		} catch (err) {
-			console.log('[RT ResourceMapper] Error fetching custom field', cfId, err);
+		} catch {
+			// Ignore errors fetching individual custom fields
 		}
 		return null;
 	});
@@ -247,7 +236,6 @@ async function fetchSelectFieldOptions(
 	skipSslCertificateValidation: boolean,
 ): Promise<Map<string, INodePropertyOptions[]>> {
 	const selectFields = customFields.filter((cf) => cf.Type === 'Select');
-	console.log('[RT ResourceMapper] Fetching options for', selectFields.length, 'Select fields');
 
 	const optionsMap = new Map<string, INodePropertyOptions[]>();
 	if (selectFields.length === 0) {
@@ -281,8 +269,8 @@ async function fetchSelectFieldOptions(
 					return { fieldName: cf.Name, options: parsedOptions };
 				}
 			}
-		} catch (err) {
-			console.log('[RT ResourceMapper] Error fetching values for', cf.Name, err);
+		} catch {
+			// Ignore errors fetching values
 		}
 		return { fieldName: cf.Name, options: [] as INodePropertyOptions[] };
 	});
@@ -334,7 +322,6 @@ function buildResourceMapperFields(
 
 		// Add (multi) to display name for multi-value Select fields
 		const displayName = isMultiValue ? `${cf.Name} (multi)` : cf.Name;
-		console.log('[RT ResourceMapper] Building field:', cf.Name, 'MaxValues:', cf.MaxValues, 'isMultiValue:', isMultiValue, 'displayName:', displayName, 'type:', fieldType);
 
 		const field: ResourceMapperField = {
 			id: cf.Name,
@@ -375,8 +362,6 @@ async function getCustomFieldsForQueue(
 		return [];
 	}
 
-	console.log('[RT ResourceMapper] Custom field names:', customFields.map((cf) => cf.Name).join(', '));
-
 	// Fetch options for Select fields
 	const optionsMap = await fetchSelectFieldOptions(context, customFields, baseUrl, skipSslCertificateValidation);
 
@@ -398,8 +383,6 @@ async function getGlobalCustomFields(
 		return [];
 	}
 
-	console.log('[RT ResourceMapper] Global custom field names:', customFields.map((cf) => cf.Name).join(', '));
-
 	// Fetch options for Select fields
 	const optionsMap = await fetchSelectFieldOptions(context, customFields, baseUrl, skipSslCertificateValidation);
 
@@ -412,8 +395,6 @@ async function getGlobalCustomFields(
  */
 export const resourceMapping = {
 	async getMappingColumns(this: ILoadOptionsFunctions): Promise<ResourceMapperFields> {
-		console.log('[RT ResourceMapper] getMappingColumns called');
-
 		try {
 			const credentials = await this.getCredentials('requestTrackerApi');
 			const baseUrl = (credentials.rtInstanceUrl as string).replace(/\/$/, '');
@@ -426,8 +407,6 @@ export const resourceMapping = {
 				// Operation parameter may not exist yet
 			}
 
-			console.log('[RT ResourceMapper] Operation:', operation);
-
 			let queueId: string | undefined;
 
 			if (operation === 'update') {
@@ -435,9 +414,6 @@ export const resourceMapping = {
 				try {
 					const updateQueueParam = this.getNodeParameter('updateFields.queue', 0, undefined) as QueueParam;
 					queueId = extractQueueNameOrId(updateQueueParam);
-					if (queueId) {
-						console.log('[RT ResourceMapper] Using queue from updateFields:', queueId);
-					}
 				} catch {
 					// updateFields.queue not available
 				}
@@ -461,10 +437,9 @@ export const resourceMapping = {
 							);
 							if (ticketQueueId) {
 								queueId = ticketQueueId;
-								console.log('[RT ResourceMapper] Got queue ID from ticket:', queueId);
 							}
-						} catch (err) {
-							console.log('[RT ResourceMapper] Error getting queue from ticket:', err);
+						} catch {
+							// Ignore errors getting queue from ticket
 						}
 					}
 				}
@@ -485,14 +460,11 @@ export const resourceMapping = {
 				fields = await getCustomFieldsForQueue(this, queueId, baseUrl, skipSslCertificateValidation);
 			} else {
 				// No queue specified - get global custom fields
-				console.log('[RT ResourceMapper] No queue specified, fetching global custom fields');
 				fields = await getGlobalCustomFields(this, baseUrl, skipSslCertificateValidation);
 			}
 
-			console.log('[RT ResourceMapper] Returning', fields.length, 'fields');
 			return { fields };
-		} catch (error) {
-			console.error('[RT ResourceMapper] Error:', error);
+		} catch {
 			return { fields: [] };
 		}
 	},
