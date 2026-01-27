@@ -736,22 +736,26 @@ export async function buildFieldsQueryParams(
 	const NOT_SET = Symbol('not-set');
 	let outputFields: string | typeof NOT_SET = NOT_SET;
 
+	// First check additionalOptions (for multi-item operations like Search, Get Many)
 	try {
-		// First try direct parameter (for single-item operations like Get)
-		outputFields = this.getNodeParameter('outputFields', '') as string;
+		const additionalOptions = this.getNodeParameter('additionalOptions', {}) as IDataObject;
+		if (additionalOptions.outputFields !== undefined) {
+			outputFields = additionalOptions.outputFields as string;
+		}
 	} catch {
-		// Ignore - parameter doesn't exist at this level
+		// Ignore - parameter doesn't exist
 	}
 
+	// Then try direct parameter (for single-item operations like Get)
+	// Only if we didn't find it in additionalOptions
 	if (outputFields === NOT_SET) {
 		try {
-			// Try additionalOptions (for multi-item operations like Search, Get Many)
-			const additionalOptions = this.getNodeParameter('additionalOptions', {}) as IDataObject;
-			if (additionalOptions.outputFields !== undefined) {
-				outputFields = additionalOptions.outputFields as string;
+			const directValue = this.getNodeParameter('outputFields', undefined) as string | undefined;
+			if (directValue !== undefined) {
+				outputFields = directValue;
 			}
 		} catch {
-			// Ignore - parameter doesn't exist
+			// Ignore - parameter doesn't exist at this level
 		}
 	}
 
