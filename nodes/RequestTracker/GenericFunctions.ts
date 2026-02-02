@@ -247,7 +247,7 @@ export async function transformOperationResponse(
 					...(ticketId ? { ticketId } : {}),
 					messages,
 				},
-				pairedItem: item.pairedItem,
+				pairedItem: item.pairedItem ?? { item: this.getItemIndex() },
 			};
 		}
 
@@ -942,7 +942,12 @@ export async function handleRtApiError(
 		);
 	}
 
-	return items;
+	// Ensure all items have pairedItem set (rootProperty extractor may not set it)
+	const itemIndex = this.getItemIndex();
+	return items.map(item => ({
+		...item,
+		pairedItem: item.pairedItem ?? { item: itemIndex },
+	}));
 }
 
 /**
@@ -2104,7 +2109,7 @@ export async function processAttachments(
 		const outputItem: INodeExecutionData = {
 			json: finalMetadata,
 			binary: binaryData ? { data: binaryData } : undefined,
-			pairedItem: item.pairedItem,
+			pairedItem: item.pairedItem ?? { item: this.getItemIndex() },
 		};
 
 		processedItems.push(outputItem);
