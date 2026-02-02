@@ -2104,6 +2104,7 @@ export async function processAttachments(
 		const outputItem: INodeExecutionData = {
 			json: finalMetadata,
 			binary: binaryData ? { data: binaryData } : undefined,
+			pairedItem: item.pairedItem,
 		};
 
 		processedItems.push(outputItem);
