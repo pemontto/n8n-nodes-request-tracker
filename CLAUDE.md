@@ -122,6 +122,7 @@ Contains shared transformation and utility functions used across operations:
      - Unwraps single-value arrays to scalars, converts empty arrays to null
      - Optionally flattens CustomFields to top-level and simplifies user/queue objects
      - Sorts keys with preferred order (id, Queue, Subject, Status, etc.)
+     - **Supports `CF.{field name}` syntax** to filter specific custom fields (see Custom Field Filtering below)
    - `transformOperationResponse`: Transforms responses from Create/Update/Comment/Correspond operations
      - Extracts result message and metadata from operation responses
    - `processTransactions` (alias: `processTicketComments`, `processTicketHistory`): Processes transactions/history items
@@ -157,6 +158,19 @@ Contains shared transformation and utility functions used across operations:
 3. **Debug Functions**:
    - `debugPreSendRequest`: Logs HTTP request details when `nodeDebug` setting enabled
    - `debugPostReceiveResponse`: Logs HTTP response details when `nodeDebug` setting enabled
+
+4. **Custom Field Filtering**:
+   - `parseCFPatterns(outputFields)`: Parses `CF.{field name}` patterns from outputFields string
+     - Returns `{ cfFields: Set<string>, remainingFields: string, hasCFPatterns: boolean }`
+     - Pattern: `CF.{field name}` where field name can contain any characters except `}`
+     - Example: `"id, Subject, CF.{Status Summary}, CF.{Priority}"` → extracts `Status Summary`, `Priority`
+   - **Integration with buildFieldsQueryParams**:
+     - Strips CF patterns from fields sent to RT API
+     - If CF patterns found, ensures `CustomFields` is requested from RT
+   - **Integration with transformation functions**:
+     - `transformTicketData`, `transformQueueData`, `transformUserData` extract CF filter from `outputFields`
+     - Pass filter to `normalizeCustomFields` which filters during normalization (before simplify flattens)
+     - Works correctly with `simplify` mode - filtered CFs get flattened normally
 
 **Usage Pattern**: Functions designed for declarative routing hooks (`postReceive`, `preSend`) receive `INodeExecutionData[]` and return transformed `INodeExecutionData[]`.
 

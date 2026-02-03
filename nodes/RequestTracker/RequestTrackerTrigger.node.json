@@ -1,0 +1,19 @@
+{
+	"node": "n8n-nodes-request-tracker.requestTrackerTrigger",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Development", "Developer Tools"],
+	"alias": ["RT Trigger", "RT"],
+	"resources": {
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/pemontto/n8n-nodes-request-tracker#readme"
+			}
+		],
+		"credentialDocumentation": [
+			{
+				"url": "https://github.com/pemontto/n8n-nodes-request-tracker#credentials"
+			}
+		]
+	}
+}
