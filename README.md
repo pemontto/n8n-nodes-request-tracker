@@ -121,6 +121,11 @@ Trigger usage:
 
 - Base URL normalization appends `/REST/2.0` automatically to your instance URL.
 - Accept: application/json is set for requests.
+- **Custom Field Filtering**: Use the `CF.{field name}` syntax in `outputFields` to select specific custom fields:
+  - Example: `id, Subject, Status, CF.{Status Summary}, CF.{Priority Level}`
+  - This returns only the specified custom fields instead of all
+  - Works with both `simplify` enabled and disabled
+  - Supported for Ticket, Queue, and User resources
 - CustomFields Resource Mapper:
   - Queue-aware loading: when a queue context is available (explicit queue parameter or resolved via ticketId), custom fields are loaded from `/queue/{id}/customfields`.
   - When no queue context is available yet, the mapper returns no fields to avoid global fetch.

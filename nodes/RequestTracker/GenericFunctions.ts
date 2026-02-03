@@ -127,15 +127,63 @@ const USER_PREFERRED_ORDER = [
 ] as const;
 
 /**
- * Normalize RT CustomFields array to a sorted dictionary
+ * Parse CF.{field name} patterns from outputFields string
+ * Returns object with:
+ * - cfFields: Set of custom field names to include (empty if no CF patterns found)
+ * - remainingFields: outputFields string with CF patterns removed
+ * - hasCFPatterns: whether any CF patterns were found
  */
-function normalizeCustomFields(input: unknown): IDataObject | undefined {
+export function parseCFPatterns(outputFields: string | undefined): {
+	cfFields: Set<string>;
+	remainingFields: string;
+	hasCFPatterns: boolean;
+} {
+	if (!outputFields || !outputFields.trim()) {
+		return { cfFields: new Set(), remainingFields: '', hasCFPatterns: false };
+	}
+
+	const cfFields = new Set<string>();
+	// Match CF.{field name} where field name can contain any chars except }
+	const cfPattern = /CF\.\{([^}]+)\}/g;
+	let match;
+
+	while ((match = cfPattern.exec(outputFields)) !== null) {
+		cfFields.add(match[1]);
+	}
+
+	// Remove CF patterns from the string and clean up
+	const remainingFields = outputFields
+		.replace(cfPattern, '')
+		.split(',')
+		.map((f) => f.trim())
+		.filter((f) => f.length > 0)
+		.join(',');
+
+	return {
+		cfFields,
+		remainingFields,
+		hasCFPatterns: cfFields.size > 0,
+	};
+}
+
+/**
+ * Normalize RT CustomFields array to a sorted dictionary
+ * @param input - RT CustomFields array or existing dictionary
+ * @param filterFields - Optional set of field names to include. If provided, only these fields are included.
+ */
+function normalizeCustomFields(
+	input: unknown,
+	filterFields?: Set<string>,
+): IDataObject | undefined {
 	if (Array.isArray(input)) {
 		const dict: IDataObject = {};
 		for (const field of input as IDataObject[]) {
 			const fieldName = (field.name as string) || '';
 			const values = field.values as unknown[];
 			if (!fieldName) continue;
+
+			// If filter specified, skip fields not in filter
+			if (filterFields && filterFields.size > 0 && !filterFields.has(fieldName)) continue;
 
 			if (!values || values.length === 0) {
 				dict[fieldName] = null;
@@ -148,6 +196,16 @@ function normalizeCustomFields(input: unknown): IDataObject | undefined {
 		return simpleAlphanumericSort(dict);
 	}
 	if (input && typeof input === 'object' && !Array.isArray(input)) {
+		// Filter existing dictionary
+		if (filterFields && filterFields.size > 0) {
+			const filtered: IDataObject = {};
+			for (const [key, value] of Object.entries(input as IDataObject)) {
+				if (filterFields.has(key)) {
+					filtered[key] = value;
+				}
+			}
+			return simpleAlphanumericSort(filtered);
+		}
 		return simpleAlphanumericSort(input as IDataObject);
 	}
 	return undefined;
@@ -360,12 +418,19 @@ function simplifyUserObject(userObj: IDataObject | string): string | IDataObject
 /**
  * Core transformation logic for ticket data
  * Exported for use in trigger node
+ * @param ticket - Raw ticket data from RT API
+ * @param simplify - Whether to simplify the output
+ * @param cfFilter - Optional set of custom field names to include
  */
-export function transformSingleTicket(ticket: IDataObject, simplify: boolean): IDataObject {
+export function transformSingleTicket(
+	ticket: IDataObject,
+	simplify: boolean,
+	cfFilter?: Set<string>,
+): IDataObject {
 	const transformed = { ...ticket };
 
-	// Transform CustomFields from array to dictionary
-	const normalizedCF = normalizeCustomFields(transformed.CustomFields);
+	// Transform CustomFields from array to dictionary, applying filter if provided
+	const normalizedCF = normalizeCustomFields(transformed.CustomFields, cfFilter);
 	if (normalizedCF) {
 		transformed.CustomFields = normalizedCF;
 	}
@@ -545,12 +610,19 @@ export function transformSingleTicket(ticket: IDataObject, simplify: boolean): I
 /**
  * Transform a single queue object from RT REST2 API format
  * Similar to transformSingleTicket but for queue resources
+ * @param queue - Raw queue data from RT API
+ * @param simplify - Whether to simplify the output
+ * @param cfFilter - Optional set of custom field names to include
  */
-export function transformSingleQueue(queue: IDataObject, simplify: boolean): IDataObject {
+export function transformSingleQueue(
+	queue: IDataObject,
+	simplify: boolean,
+	cfFilter?: Set<string>,
+): IDataObject {
 	const transformed = { ...queue };
 
-	// Transform CustomFields from array to dictionary (same as tickets)
-	const normalizedQueueCF = normalizeCustomFields(transformed.CustomFields);
+	// Transform CustomFields from array to dictionary, applying filter if provided
+	const normalizedQueueCF = normalizeCustomFields(transformed.CustomFields, cfFilter);
 	if (normalizedQueueCF) {
 		transformed.CustomFields = normalizedQueueCF;
 	}
@@ -570,6 +642,7 @@ export function transformSingleQueue(queue: IDataObject, simplify: boolean): IDa
 
 /**
  * Transform queue data from RT REST2 API format to a more usable format
+ * Supports CF.{field name} syntax to filter specific custom fields
  * This function is designed to work with n8n's declarative routing postReceive hook
  */
 export async function transformQueueData(
@@ -579,8 +652,30 @@ export async function transformQueueData(
 	// Get the simplify parameter from the node (defaults to false if not present)
 	const simplify = this.getNodeParameter('simplify', false) as boolean;
 
+	// Extract CF filter from outputFields parameter
+	let cfFilter: Set<string> | undefined;
+	try {
+		const additionalOptions = this.getNodeParameter('additionalOptions', {}) as IDataObject;
+		if (additionalOptions.outputFields !== undefined) {
+			const { cfFields, hasCFPatterns } = parseCFPatterns(additionalOptions.outputFields as string);
+			if (hasCFPatterns) {
+				cfFilter = cfFields;
+			}
+		} else {
+			const outputFields = this.getNodeParameter('outputFields', undefined) as string | undefined;
+			if (outputFields !== undefined) {
+				const { cfFields, hasCFPatterns } = parseCFPatterns(outputFields);
+				if (hasCFPatterns) {
+					cfFilter = cfFields;
+				}
+			}
+		}
+	} catch {
+		// Parameter doesn't exist, no filtering
+	}
+
 	return items.map((item) => {
-		const transformed = transformSingleQueue(item.json, simplify);
+		const transformed = transformSingleQueue(item.json, simplify, cfFilter);
 		return {
 			...item,
 			json: transformed,
@@ -591,12 +686,19 @@ export async function transformQueueData(
 /**
  * Transform a single user object from RT REST2 API format
  * Similar to transformSingleQueue but for user resources
+ * @param user - Raw user data from RT API
+ * @param simplify - Whether to simplify the output
+ * @param cfFilter - Optional set of custom field names to include
  */
-export function transformSingleUser(user: IDataObject, simplify: boolean): IDataObject {
+export function transformSingleUser(
+	user: IDataObject,
+	simplify: boolean,
+	cfFilter?: Set<string>,
+): IDataObject {
 	const transformed = { ...user };
 
-	// Transform CustomFields from array to dictionary (same as tickets/queues)
-	const normalizedUserCF = normalizeCustomFields(transformed.CustomFields);
+	// Transform CustomFields from array to dictionary, applying filter if provided
+	const normalizedUserCF = normalizeCustomFields(transformed.CustomFields, cfFilter);
 	if (normalizedUserCF) {
 		transformed.CustomFields = normalizedUserCF;
 	}
@@ -616,6 +718,7 @@ export function transformSingleUser(user: IDataObject, simplify: boolean): IData
 
 /**
  * Transform user data from RT REST2 API format to a more usable format
+ * Supports CF.{field name} syntax to filter specific custom fields
  * This function is designed to work with n8n's declarative routing postReceive hook
  */
 export async function transformUserData(
@@ -625,8 +728,30 @@ export async function transformUserData(
 	// Get the simplify parameter from the node (defaults to false if not present)
 	const simplify = this.getNodeParameter('simplify', false) as boolean;
 
+	// Extract CF filter from outputFields parameter
+	let cfFilter: Set<string> | undefined;
+	try {
+		const additionalOptions = this.getNodeParameter('additionalOptions', {}) as IDataObject;
+		if (additionalOptions.outputFields !== undefined) {
+			const { cfFields, hasCFPatterns } = parseCFPatterns(additionalOptions.outputFields as string);
+			if (hasCFPatterns) {
+				cfFilter = cfFields;
+			}
+		} else {
+			const outputFields = this.getNodeParameter('outputFields', undefined) as string | undefined;
+			if (outputFields !== undefined) {
+				const { cfFields, hasCFPatterns } = parseCFPatterns(outputFields);
+				if (hasCFPatterns) {
+					cfFilter = cfFields;
+				}
+			}
+		}
+	} catch {
+		// Parameter doesn't exist, no filtering
+	}
+
 	return items.map((item) => {
-		const transformed = transformSingleUser(item.json, simplify);
+		const transformed = transformSingleUser(item.json, simplify, cfFilter);
 		return {
 			...item,
 			json: transformed,
@@ -642,6 +767,7 @@ export async function transformUserData(
  * - Transforms _hyperlinks array to Links object organized by type
  * - Optionally simplifies output by flattening CustomFields and simplifying user/queue fields
  * - Sorts keys with preferred fields first
+ * - Supports CF.{field name} syntax to filter specific custom fields
  *
  * This function is designed to work with n8n's declarative routing postReceive hook
  */
@@ -656,8 +782,32 @@ export async function transformTicketData(
 		// Simplify parameter may not exist
 	}
 
+	// Extract CF filter from outputFields parameter
+	let cfFilter: Set<string> | undefined;
+	try {
+		// Check additionalOptions first (for multi-item operations)
+		const additionalOptions = this.getNodeParameter('additionalOptions', {}) as IDataObject;
+		if (additionalOptions.outputFields !== undefined) {
+			const { cfFields, hasCFPatterns } = parseCFPatterns(additionalOptions.outputFields as string);
+			if (hasCFPatterns) {
+				cfFilter = cfFields;
+			}
+		} else {
+			// Try direct parameter (for single-item operations)
+			const outputFields = this.getNodeParameter('outputFields', undefined) as string | undefined;
+			if (outputFields !== undefined) {
+				const { cfFields, hasCFPatterns } = parseCFPatterns(outputFields);
+				if (hasCFPatterns) {
+					cfFilter = cfFields;
+				}
+			}
+		}
+	} catch {
+		// Parameter doesn't exist, no filtering
+	}
+
 	return items.map((item) => {
-		const transformed = transformSingleTicket(item.json, simplify);
+		const transformed = transformSingleTicket(item.json, simplify, cfFilter);
 		return {
 			...item,
 			json: transformed,
@@ -812,12 +962,23 @@ export async function buildFieldsQueryParams(
 	if (outputFields !== NOT_SET) {
 		// Parameter was found - use user's value
 		if (outputFields && outputFields.trim()) {
-			// Non-empty: use user's fields, but add dependencies required for post-processing
-			let fields = outputFields.trim();
+			// Parse CF.{field name} patterns and remove them from fields sent to RT
+			const { remainingFields, hasCFPatterns } = parseCFPatterns(outputFields);
+
+			// Start with remaining fields (CF patterns removed)
+			let fields = remainingFields;
+
+			// If CF patterns found, ensure CustomFields is requested from RT
+			if (hasCFPatterns) {
+				const fieldList = fields.split(',').map((f) => f.trim().toLowerCase());
+				if (!fieldList.includes('customfields')) {
+					fields = fields ? fields + ',CustomFields' : 'CustomFields';
+				}
+			}
 
 			// Transaction field dependencies for post-processing
-			if (effectiveResource === 'transaction') {
-				const fieldList = fields.split(',').map(f => f.trim().toLowerCase());
+			if (effectiveResource === 'transaction' && fields) {
+				const fieldList = fields.split(',').map((f) => f.trim().toLowerCase());
 				const fieldsToAdd: string[] = [];
 
 				// Field resolution requires Type to determine if it's a CustomField
@@ -838,7 +999,9 @@ export async function buildFieldsQueryParams(
 				}
 			}
 
-			requestOptions.qs.fields = fields;
+			if (fields) {
+				requestOptions.qs.fields = fields;
+			}
 		}
 		// Empty string: don't set fields param at all, RT returns minimum fields
 	} else {
